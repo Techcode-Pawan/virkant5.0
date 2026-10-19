@@ -1,0 +1,113 @@
+{
+  "brand": {
+    "name": "ForgeWise AI",
+    "tagline": "Industrial Multimodal Knowledge Assistant"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "chat": "AI Assistant",
+    "documents": "SOP Library",
+    "machines": "Equipment Registry",
+    "analytics": "Telemetry",
+    "admin": "Admin Console",
+    "settings": "Settings",
+    "login": "Sign In",
+    "register": "Register",
+    "logout": "Sign Out",
+    "features": "Capabilities",
+    "security": "Cybersecurity",
+    "contact": "Contact",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Use",
+    "dataDeclaration": "Data Declaration"
+  },
+  "landing": {
+    "heroTitle": "Industrial knowledge, ready when your team needs it.",
+    "heroSubtitle": "Search SOPs, equipment manuals, diagrams, and expert documentation through one secure, multilingual AI assistant.",
+    "exploreCta": "Explore the Platform",
+    "howItWorksCta": "View How It Works",
+    "threeDHint": "Interactive 3D Assembly. Drag to rotate geometry. Click pins for SOP references.",
+    "problemTitle": "The Cost of Fragmented Technical Knowledge",
+    "problemDesc": "Frontline technicians lose critical operational hours searching 600-page OEM manuals or waiting for senior engineers. ForgeWise AI provides traceable, verified answers in seconds.",
+    "featuresTitle": "Engineered for High-Reliability Operations",
+    "ragTitle": "Zero-Hallucination Hybrid RAG",
+    "ragDesc": "Combines vector similarity with exact token search for error codes, part numbers, and hydraulic ratings. If evidence is lacking, it delivers an honest refusal.",
+    "citationsTitle": "100% Traceable Citations",
+    "citationsDesc": "Every parameter connects directly to verified document versions and page numbers with side-by-side inspection.",
+    "multilingualTitle": "Bilingual Operational Fluency",
+    "multilingualDesc": "Full support for English and Hindi interfaces while preserving Latin engineering tags and part numbers.",
+    "safetyTitle": "EHS Safety Compliance First",
+    "safetyDesc": "Mandatory Lockout/Tagout (LOTO) callouts prepend any hazardous maintenance procedure.",
+    "faqTitle": "Frequently Asked Questions"
+  },
+  "chat": {
+    "placeholder": "Ask about SOPs, error codes, torque limits, or troubleshooting...",
+    "send": "Submit Query",
+    "recording": "Listening to voice input...",
+    "stopSpeaking": "Stop Voice",
+    "repeatSpeech": "Repeat Answer",
+    "selectMachine": "Filter by Machine / Equipment",
+    "allMachines": "All Plant Equipment",
+    "citationsHeader": "Verified Source Citations",
+    "page": "Page",
+    "inspectSource": "Inspect Source Page",
+    "insufficientEvidenceNotice": "The uploaded technical library does not contain verified data for this query. Please consult plant engineering.",
+    "safetyWarning": "SAFETY FIRST: De-energize equipment and follow facility Lockout/Tagout (LOTO) protocols before executing this procedure.",
+    "feedbackPrompt": "Was this diagnostic answer helpful?",
+    "copyAnswer": "Copy Response",
+    "copied": "Copied to clipboard"
+  },
+  "documents": {
+    "title": "Industrial Documentation & SOP Library",
+    "uploadButton": "Upload SOP / Manual",
+    "status": "Status",
+    "pages": "Pages",
+    "version": "Version",
+    "actions": "Actions",
+    "processing": "Extracting & Indexing...",
+    "ready": "Indexed & Searchable",
+    "failed": "Processing Failed",
+    "uploadModalTitle": "Upload Technical Document",
+    "fileLabel": "Choose File (PDF, DOCX, TXT, PNG, JPG)",
+    "titleLabel": "Document Title",
+    "machineLabel": "Associated Machine / Asset",
+    "submitUpload": "Start Ingestion Pipeline"
+  },
+  "machines": {
+    "title": "Plant Machinery & Asset Registry",
+    "addMachine": "Register Asset",
+    "location": "Plant Location",
+    "manufacturer": "Manufacturer",
+    "documents": "Linked Documents",
+    "viewManuals": "View SOPs"
+  },
+  "analytics": {
+    "title": "Operational Telemetry & Knowledge Analytics",
+    "totalQueries": "Total Queries (30d)",
+    "groundedRate": "Groundedness Rate",
+    "avgLatency": "Mean Retrieval Latency",
+    "unansweredGaps": "Unanswered Knowledge Gaps",
+    "commonIssuesTitle": "Most Frequent Diagnostic Inquiries",
+    "frequency": "Frequency",
+    "topic": "Maintenance Topic"
+  },
+  "admin": {
+    "title": "Organization Administration & Access Governance",
+    "members": "Team Members",
+    "auditLogs": "Security Audit Trail",
+    "role": "Role",
+    "inviteUser": "Invite Team Member",
+    "action": "Action",
+    "timestamp": "Timestamp"
+  },
+  "settings": {
+    "title": "User Preferences & Accessibility",
+    "language": "Interface Language",
+    "theme": "Display Theme",
+    "light": "Precision Light",
+    "dark": "Industrial Dark",
+    "highContrast": "High Contrast (Sunlight/Gloves)",
+    "motion": "Reduced Motion Mode",
+    "save": "Save Preferences"
+  }
+}
