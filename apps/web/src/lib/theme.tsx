@@ -1,8 +1,10 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 export type ThemeMode = "light" | "dark" | "high-contrast";
+
+const THEME_KEY = "forgewise_theme";
 
 interface ThemeContextType {
   theme: ThemeMode;
@@ -11,44 +13,37 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "light",
+  theme: "dark",
   setTheme: () => {},
   toggleTheme: () => {},
 });
 
+/** Runs before hydration (see app/layout.tsx) so there is no flash of the wrong theme. */
+export const themeBootScript = `try{var t=localStorage.getItem("${THEME_KEY}");if(t!=="light"&&t!=="high-contrast")t="dark";document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","dark")}`;
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>("light");
-  const [mounted, setMounted] = useState(false);
+  const [theme, setThemeState] = useState<ThemeMode>("dark");
 
   useEffect(() => {
-    const saved = localStorage.getItem("forgewise_theme") as ThemeMode | null;
-    if (saved && (saved === "light" || saved === "dark" || saved === "high-contrast")) {
-      setThemeState(saved);
-      document.documentElement.setAttribute("data-theme", saved);
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setThemeState("dark");
-      document.documentElement.setAttribute("data-theme", "dark");
-    }
-    setMounted(true);
+    const current = document.documentElement.getAttribute("data-theme") as ThemeMode | null;
+    if (current === "light" || current === "high-contrast") setThemeState(current);
   }, []);
 
-  const setTheme = (mode: ThemeMode) => {
+  const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode);
-    localStorage.setItem("forgewise_theme", mode);
     document.documentElement.setAttribute("data-theme", mode);
-  };
+    try {
+      localStorage.setItem(THEME_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
-  const toggleTheme = () => {
-    if (theme === "light") setTheme("dark");
-    else if (theme === "dark") setTheme("high-contrast");
-    else setTheme("light");
-  };
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === "dark" ? "light" : theme === "light" ? "high-contrast" : "dark");
+  }, [theme, setTheme]);
 
-  return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

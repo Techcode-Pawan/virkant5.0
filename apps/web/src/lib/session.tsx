@@ -1,304 +1,224 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { UserSession, WorkspaceInfo, AIModelCode, LanguageCode, UserRole } from "@/types";
-import { fetchApi } from "./api-client";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { AIModelCode, LanguageCode, UserRole, UserSession, WorkspaceInfo } from "@/types";
+import { AUTH_EXPIRED_EVENT, AUTH_TOKEN_KEY, fetchApi } from "./api-client";
+
+type SessionStatus = "loading" | "authenticated" | "anonymous";
+
+interface SignInOptions {
+  newWorkspace?: boolean;
+  fullName?: string;
+}
 
 interface SessionContextType {
   session: UserSession | null;
-  activeWorkspaceId: string;
-  selectedModel: AIModelCode;
-  selectedLanguage: LanguageCode;
-  workspaces: WorkspaceInfo[];
+  status: SessionStatus;
   isLoading: boolean;
-  signIn: (email: string, role: UserRole, preferredLanguage?: LanguageCode, newWorkspace?: boolean) => Promise<UserSession>;
-  createNewWorkspace: (name?: string) => Promise<WorkspaceInfo>;
-  switchWorkspace: (workspaceId: string) => void;
-  setSelectedModel: (model: AIModelCode) => void;
-  setSelectedLanguage: (lang: LanguageCode) => void;
-  refreshWorkspaces: () => Promise<void>;
+  activeWorkspaceId: string;
+  workspaces: WorkspaceInfo[];
+  /** null = use the workspace/server default model */
+  selectedModel: AIModelCode | null;
+  selectedLanguage: LanguageCode;
+  signIn: (email: string, role: UserRole, preferredLanguage?: LanguageCode, options?: SignInOptions) => Promise<UserSession>;
   signOut: () => void;
+  createNewWorkspace: (name?: string) => Promise<WorkspaceInfo>;
+  switchWorkspace: (workspaceId: string) => Promise<void>;
+  refreshWorkspaces: () => Promise<void>;
+  setSelectedModel: (model: AIModelCode | null) => void;
+  setSelectedLanguage: (lang: LanguageCode) => void;
 }
 
-const DEFAULT_SESSION: UserSession = {
-  token: "mock-operator:a1111111:c1a2b3c4:ws-a1111111:sess-default",
-  session_id: "sess-default",
-  user_id: "a1111111-1111-1111-1111-111111111111",
-  email: "operator.rajesh@vikrant.internal",
-  full_name: "Rajesh Sharma",
-  role: "operator",
-  organization_id: "c1a2b3c4-d5e6-7f80-9a0b-1c2d3e4f5a6b",
-  organization_name: "Vikrant Heavy Forge Industries",
-  workspace_id: "ws-a1111111",
-  workspace_name: "Operator Rajesh Bay C-4",
-  preferred_language: "hi",
-  selected_model: "gemini-2.5-flash",
-  created_at: new Date().toISOString(),
-};
+const SESSION_KEY = "forgewise_session";
+const MODEL_KEY = "forgewise_selected_model";
+const LANG_KEY = "forgewise_lang";
 
-const SessionContext = createContext<SessionContextType>({
-  session: DEFAULT_SESSION,
-  activeWorkspaceId: "ws-a1111111",
-  selectedModel: "gemini-2.5-flash",
-  selectedLanguage: "en",
-  workspaces: [],
-  isLoading: false,
-  signIn: async () => DEFAULT_SESSION,
-  createNewWorkspace: async () => ({ id: "", name: "", user_id: "", document_count: 0, is_active: true, created_at: "" }),
-  switchWorkspace: () => {},
-  setSelectedModel: () => {},
-  setSelectedLanguage: () => {},
-  refreshWorkspaces: async () => {},
-  signOut: () => {},
-});
+const SessionContext = createContext<SessionContextType | null>(null);
+
+function store(key: string, value: string | null) {
+  try {
+    if (value === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable (private mode) — session lives in memory only */
+  }
+}
+
+function read(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function toSession(r: any): UserSession {
+  return {
+    token: r.token,
+    session_id: r.session_id,
+    user_id: r.user_id,
+    email: r.email,
+    full_name: r.full_name,
+    role: r.role,
+    organization_id: r.organization_id,
+    organization_name: r.organization_name,
+    workspace_id: r.workspace_id,
+    workspace_name: r.workspace_name,
+    preferred_language: r.preferred_language,
+    created_at: r.created_at,
+  };
+}
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<UserSession | null>(DEFAULT_SESSION);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("ws-a1111111");
-  const [selectedModel, setSelectedModelState] = useState<AIModelCode>("gemini-2.5-flash");
-  const [selectedLanguage, setSelectedLanguageState] = useState<LanguageCode>("en");
+  const [session, setSession] = useState<UserSession | null>(null);
+  const [status, setStatus] = useState<SessionStatus>("loading");
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [selectedModel, setSelectedModelState] = useState<AIModelCode | null>(null);
+  const [selectedLanguage, setSelectedLanguageState] = useState<LanguageCode>("en");
 
-  // Initialize from localStorage or fetch profile
-  useEffect(() => {
-    async function initSession() {
-      if (typeof window !== "undefined") {
-        const storedToken = localStorage.getItem("forgewise_auth_token");
-        const storedWs = localStorage.getItem("forgewise_active_workspace");
-        const storedModel = localStorage.getItem("forgewise_selected_model") as AIModelCode | null;
-        const storedRole = (localStorage.getItem("forgewise_user_role") || "operator") as UserRole;
-        const storedEmail = localStorage.getItem("forgewise_user_email") || "operator.rajesh@vikrant.internal";
-
-        if (storedModel) setSelectedModelState(storedModel);
-        if (storedWs) setActiveWorkspaceId(storedWs);
-
-        if (storedToken) {
-          try {
-            const profile = await fetchApi<any>("/api/v1/auth/me");
-            const wsId = storedWs || profile.workspace_id || "ws-a1111111";
-            setActiveWorkspaceId(wsId);
-            setSession({
-              token: storedToken,
-              session_id: profile.session_id || "sess-init",
-              user_id: profile.user_id,
-              email: profile.email || storedEmail,
-              full_name: profile.full_name || storedEmail.split("@")[0].replace(".", " "),
-              role: profile.role || storedRole,
-              organization_id: profile.organization_id,
-              organization_name: profile.organization_name || "Vikrant Heavy Forge Industries",
-              workspace_id: wsId,
-              workspace_name: `Isolated Workspace (${(profile.role || storedRole).toUpperCase()})`,
-              preferred_language: profile.preferred_language || "en",
-              selected_model: storedModel || "gemini-2.5-flash",
-              created_at: new Date().toISOString(),
-            });
-          } catch {
-            // Offline or default fallback
-            setSession(DEFAULT_SESSION);
-          }
-        } else {
-          setSession(DEFAULT_SESSION);
-        }
-      }
-      setIsLoading(false);
-    }
-    initSession();
+  const persist = useCallback((s: UserSession | null) => {
+    setSession(s);
+    setStatus(s ? "authenticated" : "anonymous");
+    store(AUTH_TOKEN_KEY, s?.token ?? null);
+    store(SESSION_KEY, s ? JSON.stringify(s) : null);
   }, []);
 
-  const refreshWorkspaces = async () => {
-    try {
-      const data = await fetchApi<WorkspaceInfo[]>("/api/v1/auth/workspaces");
-      setWorkspaces(data);
-    } catch {
-      setWorkspaces([
-        {
-          id: activeWorkspaceId,
-          name: `Workspace ${activeWorkspaceId}`,
-          user_id: session?.user_id || "user-1",
-          document_count: 3,
-          is_active: true,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+  // Restore and verify a stored session once on load.
+  useEffect(() => {
+    const model = read(MODEL_KEY);
+    if (model) setSelectedModelState(model);
+    const lang = read(LANG_KEY) as LanguageCode | null;
+    if (lang) setSelectedLanguageState(lang);
+
+    const raw = read(SESSION_KEY);
+    const token = read(AUTH_TOKEN_KEY);
+    if (!raw || !token) {
+      setStatus("anonymous");
+      return;
     }
-  };
+    let cached: UserSession | null = null;
+    try {
+      cached = JSON.parse(raw);
+    } catch {
+      cached = null;
+    }
+    if (!cached) {
+      persist(null);
+      return;
+    }
+    setSession(cached);
+    fetchApi<any>("/api/v1/auth/me")
+      .then((me) => {
+        const fresh = { ...cached!, full_name: me.full_name, role: me.role, workspace_id: me.workspace_id, workspace_name: me.workspace_name };
+        persist(fresh);
+      })
+      .catch((err) => {
+        // Expired/invalid token → sign out. Backend unreachable → keep the cached session (UI shows offline state).
+        if (err?.status === 401) persist(null);
+        else setStatus("authenticated");
+      });
+  }, [persist]);
 
   useEffect(() => {
-    if (session?.token) {
-      refreshWorkspaces();
-    }
-  }, [session?.token, activeWorkspaceId]);
+    const onExpired = () => persist(null);
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, [persist]);
 
-  const signIn = async (
-    email: string,
-    role: UserRole,
-    preferredLanguage: LanguageCode = "en",
-    newWorkspace: boolean = true
-  ): Promise<UserSession> => {
-    setIsLoading(true);
+  const refreshWorkspaces = useCallback(async () => {
     try {
+      setWorkspaces(await fetchApi<WorkspaceInfo[]>("/api/v1/auth/workspaces"));
+    } catch {
+      /* leave previous list; the switcher shows the active workspace from the session */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === "authenticated") refreshWorkspaces();
+  }, [status, session?.workspace_id, refreshWorkspaces]);
+
+  const signIn = useCallback(
+    async (email: string, role: UserRole, preferredLanguage: LanguageCode = "en", options: SignInOptions = {}) => {
       const response = await fetchApi<any>("/api/v1/auth/session", {
         method: "POST",
         body: JSON.stringify({
           email,
           role,
           preferred_language: preferredLanguage,
-          new_workspace: newWorkspace,
+          full_name: options.fullName || undefined,
+          new_workspace: options.newWorkspace ?? false,
         }),
       });
+      const next = toSession(response);
+      persist(next);
+      return next;
+    },
+    [persist],
+  );
 
-      const newSession: UserSession = {
-        token: response.token,
-        session_id: response.session_id,
-        user_id: response.user_id,
-        email: response.email,
-        full_name: response.full_name,
-        role: response.role,
-        organization_id: response.organization_id,
-        organization_name: response.organization_name,
-        workspace_id: response.workspace_id,
-        workspace_name: response.workspace_name,
-        preferred_language: response.preferred_language || preferredLanguage,
-        selected_model: selectedModel,
-        created_at: response.created_at,
-      };
+  const signOut = useCallback(() => {
+    persist(null);
+    setWorkspaces([]);
+  }, [persist]);
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("forgewise_auth_token", response.token);
-        localStorage.setItem("forgewise_user_role", response.role);
-        localStorage.setItem("forgewise_user_email", response.email);
-        localStorage.setItem("forgewise_active_workspace", response.workspace_id);
-      }
+  const switchWorkspace = useCallback(
+    async (workspaceId: string) => {
+      const response = await fetchApi<any>("/api/v1/auth/workspace/switch", {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: workspaceId }),
+      });
+      persist(toSession(response));
+    },
+    [persist],
+  );
 
-      setSession(newSession);
-      setActiveWorkspaceId(response.workspace_id);
-      await refreshWorkspaces();
-      setIsLoading(false);
-      return newSession;
-    } catch (err) {
-      console.error("Sign-in session generation failed:", err);
-      // Fallback local mock session
-      const wsId = `ws-${Math.random().toString(36).substring(2, 10)}`;
-      const fallbackToken = `mock-${role}:${email}:c1a2b3c4:${wsId}:sess-local`;
-      const fallbackSession: UserSession = {
-        token: fallbackToken,
-        session_id: "sess-local",
-        user_id: `usr-${email.split("@")[0]}`,
-        email,
-        full_name: email.split("@")[0].replace(".", " "),
-        role,
-        organization_id: "c1a2b3c4-d5e6-7f80-9a0b-1c2d3e4f5a6b",
-        organization_name: "Vikrant Heavy Forge Industries",
-        workspace_id: wsId,
-        workspace_name: `${email.split("@")[0]}'s Workspace`,
-        preferred_language: preferredLanguage,
-        selected_model: selectedModel,
-        created_at: new Date().toISOString(),
-      };
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem("forgewise_auth_token", fallbackToken);
-        localStorage.setItem("forgewise_user_role", role);
-        localStorage.setItem("forgewise_user_email", email);
-        localStorage.setItem("forgewise_active_workspace", wsId);
-      }
-
-      setSession(fallbackSession);
-      setActiveWorkspaceId(wsId);
-      setIsLoading(false);
-      return fallbackSession;
-    }
-  };
-
-  const createNewWorkspace = async (name?: string): Promise<WorkspaceInfo> => {
-    try {
-      const newWs = await fetchApi<WorkspaceInfo>("/api/v1/auth/workspace/new", {
+  const createNewWorkspace = useCallback(
+    async (name?: string) => {
+      const ws = await fetchApi<WorkspaceInfo>("/api/v1/auth/workspace/new", {
         method: "POST",
         body: JSON.stringify({ name }),
       });
-      switchWorkspace(newWs.id);
-      await refreshWorkspaces();
-      return newWs;
-    } catch {
-      const generatedId = `ws-${Math.random().toString(36).substring(2, 10)}`;
-      const fallbackWs: WorkspaceInfo = {
-        id: generatedId,
-        name: name || `Clean Workspace ${generatedId}`,
-        user_id: session?.user_id || "user",
-        document_count: 0,
-        is_active: true,
-        created_at: new Date().toISOString(),
-      };
-      switchWorkspace(generatedId);
-      setWorkspaces((prev) => [fallbackWs, ...prev]);
-      return fallbackWs;
-    }
-  };
-
-  const switchWorkspace = (workspaceId: string) => {
-    setActiveWorkspaceId(workspaceId);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("forgewise_active_workspace", workspaceId);
-      if (session) {
-        // Update auth token with new workspace_id
-        const parts = session.token.split(":");
-        if (parts.length >= 3) {
-          const newToken = `mock-${session.role}:${session.user_id}:${session.organization_id}:${workspaceId}:${session.session_id}`;
-          localStorage.setItem("forgewise_auth_token", newToken);
-          setSession((prev) => (prev ? { ...prev, workspace_id: workspaceId, token: newToken } : null));
-        }
-      }
-    }
-  };
-
-  const setSelectedModel = (model: AIModelCode) => {
-    setSelectedModelState(model);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("forgewise_selected_model", model);
-    }
-    setSession((prev) => (prev ? { ...prev, selected_model: model } : null));
-  };
-
-  const setSelectedLanguage = (lang: LanguageCode) => {
-    setSelectedLanguageState(lang);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("forgewise_lang", lang);
-    }
-    setSession((prev) => (prev ? { ...prev, preferred_language: lang } : null));
-  };
-
-  const signOut = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("forgewise_auth_token");
-      localStorage.removeItem("forgewise_active_workspace");
-    }
-    setSession(null);
-  };
-
-  return (
-    <SessionContext.Provider
-      value={{
-        session,
-        activeWorkspaceId,
-        selectedModel,
-        selectedLanguage,
-        workspaces,
-        isLoading,
-        signIn,
-        createNewWorkspace,
-        switchWorkspace,
-        setSelectedModel,
-        setSelectedLanguage,
-        refreshWorkspaces,
-        signOut,
-      }}
-    >
-      {children}
-    </SessionContext.Provider>
+      await switchWorkspace(ws.id);
+      return ws;
+    },
+    [switchWorkspace],
   );
+
+  const setSelectedModel = useCallback((model: AIModelCode | null) => {
+    setSelectedModelState(model);
+    store(MODEL_KEY, model);
+  }, []);
+
+  const setSelectedLanguage = useCallback((lang: LanguageCode) => {
+    setSelectedLanguageState(lang);
+    store(LANG_KEY, lang);
+  }, []);
+
+  const value = useMemo<SessionContextType>(
+    () => ({
+      session,
+      status,
+      isLoading: status === "loading",
+      activeWorkspaceId: session?.workspace_id ?? "",
+      workspaces,
+      selectedModel,
+      selectedLanguage,
+      signIn,
+      signOut,
+      createNewWorkspace,
+      switchWorkspace,
+      refreshWorkspaces,
+      setSelectedModel,
+      setSelectedLanguage,
+    }),
+    [session, status, workspaces, selectedModel, selectedLanguage, signIn, signOut, createNewWorkspace, switchWorkspace, refreshWorkspaces, setSelectedModel, setSelectedLanguage],
+  );
+
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
 export function useSession() {
-  return useContext(SessionContext);
+  const ctx = useContext(SessionContext);
+  if (!ctx) throw new Error("useSession must be used inside <SessionProvider>");
+  return ctx;
 }

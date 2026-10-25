@@ -1,36 +1,48 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/lib/theme";
+import { ThemeProvider, themeBootScript } from "@/lib/theme";
 import { I18nProvider } from "@/lib/i18n";
 import { SessionProvider } from "@/lib/session";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
 import { siteConfig } from "@/lib/config";
 
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: `${siteConfig.brandName} — Precision Industrial Copilot`,
+  title: { default: siteConfig.brandName, template: `%s | ${siteConfig.brandName}` },
   description:
-    "Search Standard Operating Procedures, OEM manuals, engineering schematics, and expert maintenance knowledge through one grounded, multilingual AI copilot.",
-  icons: {
-    icon: "/favicon.ico",
-  },
+    "Grounded AI assistant for SOPs, OEM manuals and maintenance knowledge, with chat, hands-free voice and page-level citations.",
+  icons: { icon: "/logo.svg" },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export const viewport: Viewport = {
+  themeColor: "#0f1318",
+  width: "device-width",
+  initialScale: 1,
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen flex flex-col bg-base text-txt-primary">
+    <html lang="en" data-theme="dark" suppressHydrationWarning className={`${plexSans.variable} ${plexMono.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
+      <body className="min-h-screen bg-base text-txt-primary antialiased">
         <ThemeProvider>
           <I18nProvider>
-            <SessionProvider>
-              <Navbar />
-              <div className="flex-1">{children}</div>
-              <Footer />
-            </SessionProvider>
+            <SessionProvider>{children}</SessionProvider>
           </I18nProvider>
         </ThemeProvider>
       </body>

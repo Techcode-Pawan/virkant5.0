@@ -8,18 +8,16 @@ export type UserRole =
 
 export type LanguageCode = 'en' | 'hi' | 'es' | 'de' | 'fr' | 'ja';
 
-export type AIModelCode =
-  | 'gemini-2.5-flash'
-  | 'gpt-4o'
-  | 'claude-3-5-sonnet'
-  | 'ollama-industrial'
-  | 'forgewise-expert';
+/** Model id from GET /api/v1/llm/models (e.g. "gemini-2.5-flash", "ollama/llama3.1:8b"). */
+export type AIModelCode = string;
+
+export type ChatMode = 'grounded' | 'general';
 
 export type ThemeMode = 'light' | 'dark' | 'high-contrast';
 
 export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'failed';
 
-export type GroundednessStatus = 'supported' | 'insufficient_evidence' | 'needs_review';
+export type GroundednessStatus = 'supported' | 'insufficient_evidence' | 'general' | 'needs_review';
 
 export interface Citation {
   citation_id: string;
@@ -31,6 +29,17 @@ export interface Citation {
   relevance_score?: number;
 }
 
+export interface LLMAttempt {
+  model_id: string;
+  provider: string;
+  ok: boolean;
+  error_kind?: string | null;
+  message?: string | null;
+  latency_ms: number;
+  retries: number;
+  skipped: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   conversation_id: string;
@@ -40,8 +49,77 @@ export interface ChatMessage {
   citations?: Citation[];
   latency_ms?: number;
   model_used?: string;
+  provider?: string | null;
+  fallback_used?: boolean;
+  degraded?: boolean;
+  attempts?: LLMAttempt[];
+  feedback?: number | null;
   workspace_id?: string;
   created_at: string;
+  /** client-only: request failed, can be retried */
+  failed?: boolean;
+  errorCode?: string;
+}
+
+export interface ChatResponse {
+  answer: string;
+  language: string;
+  conversation_id: string;
+  request_id: string;
+  grounded: boolean;
+  confidence_status: GroundednessStatus;
+  citations: Citation[];
+  model_used: string;
+  provider?: string | null;
+  fallback_used: boolean;
+  degraded: boolean;
+  attempts: LLMAttempt[];
+  latency_ms: number;
+  workspace_id?: string;
+  message_id?: string;
+  user_message_id?: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  machine_id?: string | null;
+  language: string;
+  mode: ChatMode;
+  message_count: number;
+  last_model?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationDetail extends ConversationSummary {
+  messages: Array<Omit<ChatMessage, 'conversation_id'>>;
+}
+
+export type ProviderState = 'not_configured' | 'unverified' | 'ready' | 'degraded' | 'unavailable' | 'error';
+
+export interface ProviderStatus {
+  id: string;
+  label: string;
+  configured: boolean;
+  requires_key: boolean;
+  state: ProviderState;
+  default_model: string | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  last_checked_at: string | null;
+  last_error_kind: string | null;
+  last_error: string | null;
+  cooldown_seconds: number;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+  context_window: number;
+  available: boolean;
 }
 
 export interface Machine {
@@ -70,6 +148,7 @@ export interface DocumentItem {
   version: string;
   status: DocumentStatus;
   page_count: number;
+  chunk_count?: number;
   is_custom?: boolean;
   error_message?: string | null;
   created_at: string;
@@ -96,7 +175,6 @@ export interface UserSession {
   workspace_id: string;
   workspace_name: string;
   preferred_language: LanguageCode;
-  selected_model: AIModelCode;
   created_at: string;
 }
 
@@ -107,6 +185,7 @@ export interface AnalyticsOverview {
   unanswered_knowledge_gaps_count: number;
   documents_indexed_count: number;
   active_operators_count: number;
+  assistant_answers_last_30d: number;
 }
 
 export interface CommonIssueItem {
@@ -133,4 +212,11 @@ export interface AuditLogItem {
   target_id?: string;
   ip_address?: string;
   created_at: string;
+}
+
+export interface HealthStatus {
+  status: 'healthy' | 'degraded';
+  version: string;
+  database: { status: 'connected' | 'disconnected' | 'not_configured'; database?: string; latency_ms?: number | null; error?: string | null };
+  llm: { configured_providers: string[]; primary_model: string; offline_fallback: boolean };
 }

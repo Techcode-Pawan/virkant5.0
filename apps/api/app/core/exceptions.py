@@ -51,6 +51,39 @@ class DocumentValidationError(ForgeWiseException):
             details=details
         )
 
+class InvalidInputError(ForgeWiseException):
+    def __init__(self, message: str):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error_code="INVALID_INPUT",
+            message=message
+        )
+
+class NotFoundError(ForgeWiseException):
+    def __init__(self, message: str = "Requested resource was not found"):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            error_code="NOT_FOUND",
+            message=message
+        )
+
+class DatabaseUnavailableError(ForgeWiseException):
+    def __init__(self, message: str = "The database is currently unreachable. Please retry shortly."):
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            error_code="DATABASE_UNAVAILABLE",
+            message=message
+        )
+
+class LLMUnavailableError(ForgeWiseException):
+    def __init__(self, message: str, attempts: Optional[list] = None):
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            error_code="LLM_UNAVAILABLE",
+            message=message,
+            details={"attempts": attempts or []}
+        )
+
 class RateLimitExceededError(ForgeWiseException):
     def __init__(self, retry_after_seconds: int = 60):
         super().__init__(

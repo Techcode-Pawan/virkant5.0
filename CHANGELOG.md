@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [5.1.0] - 2026-10-25
+
+### Changed
+- **Persistence moved to MongoDB** (PyMongo async). Replaces the SQLite file and the unused Postgres/SQLAlchemy layer. Centralized connection with startup validation, indexes, seeding, graceful shutdown, real health checks and 503 responses when the database is unreachable. One-time migration script: `apps/api/scripts/migrate_sqlite_to_mongo.py`.
+- **Provider-independent LLM service** with Gemini, OpenAI(-compatible), Anthropic and Ollama adapters, model selection, configurable fallback chain, bounded retries with jittered backoff, per-provider cooldown, context-window trimming and honest provider status endpoints (`/api/v1/llm/*`).
+- **Voice assistant rebuilt**: continuous sessions with automatic restart, configurable silence window, explicit Listening/Processing/Speaking/Reconnecting states, half-duplex playback with interrupt, optional barge-in, chunked speech synthesis and full cleanup on unmount.
+- **UI redesign**: dark design system (IBM Plex, temper-blue accent), collapsible sidebar behind a hamburger button (overlay on mobile), new Dashboard, Chat, Voice, History and AI models pages, procedural Three.js emblem replacing the machine/CAD 3D scenes.
+- Auth issues signed JWTs; user ids are stable across restarts; workspace switching is verified server-side.
+- Next.js 15.1.12 / React 19.0.9 (security fixes for CVE-2025-66478).
+
+### Fixed
+- Health endpoints always reported "connected"; history, admin users/audit and machines returned hardcoded data.
+- The mock provider fabricated safety-critical values (e.g. torque specs) and was used silently whenever a real provider failed.
+- Gemini API key was sent in the URL query string (and logged by httpx).
+- The Next.js proxy's 30 s timeout cut off slow LLM calls, and the client then re-sent the request directly to the backend (duplicate calls).
+- Voice recognition ended after one phrase or a few seconds of silence; answers were never read aloud in voice mode.
+- Upload filenames allowed path traversal; document delete was not scoped to the workspace; the default workspace's documents leaked into every workspace.
+- Failed deletes and contact-form submissions were reported as successful.
+- Tailwind opacity modifiers (e.g. `bg-teal/15`) silently produced no styles.
+
+### Removed
+- SQLite/SQLAlchemy/asyncpg/pgvector/Redis dependencies, the in-memory document registry, forgot/reset-password pages (there are no passwords), unused frontend packages (framer-motion, react-hook-form, zod).
+
 ## [1.0.0] - 2026-10-20
 
 ### Added

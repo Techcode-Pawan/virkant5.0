@@ -1,10 +1,10 @@
 import io
 from typing import List, Dict, Any, Tuple
 from pypdf import PdfReader
-from docx import Document as DocxDocument
 from app.core.exceptions import DocumentValidationError
 from app.ingestion.chunking import structure_aware_chunking
-from app.ai.model_registry import get_embedding_provider
+from app.ai.embeddings import embed_documents
+from app.ai.vision import describe_image
 
 MAGIC_SIGNATURES = {
     b"%PDF-": "application/pdf",
@@ -54,10 +54,12 @@ def extract_pages_from_pdf(file_bytes: bytes) -> List[Tuple[int, str]]:
     # Fallback for scanned PDF or text recovery
     decoded = file_bytes.decode("utf-8", errors="ignore")
     clean_lines = [line.strip() for line in decoded.splitlines() if len(line.strip()) > 3]
-    text_content = "\n".join(clean_lines[:100]) or "Industrial SOP Standard Operating Procedure Document"
-    return [(1, text_content)]
+    # Only keeps text when the raw stream is plainly readable; never invents content.
+    text_content = "\n".join(clean_lines[:100])
+    return [(1, text_content)] if text_content else []
 
 def extract_from_docx(file_bytes: bytes) -> List[Tuple[int, str]]:
+    from docx import Document as DocxDocument  # lazy: lxml is only needed for .docx uploads
     doc = DocxDocument(io.BytesIO(file_bytes))
     full_text = []
     for para in doc.paragraphs:
@@ -91,21 +93,15 @@ async def extract_from_image_schematic(file_bytes: bytes, filename: str, mime_ty
 
     # 2. Vision provider schematic description
     try:
-        from app.ai.model_registry import get_vision_provider
-        vision = get_vision_provider()
-        desc = await vision.describe_schematic(
-            image_bytes=file_bytes,
-            mime_type=mime_type,
-            prompt=f"Extract technical specifications, torque ratings, component IDs, and safety cautions from this industrial schematic ({filename})."
-        )
+        desc = await describe_image(file_bytes, mime_type)
         if desc:
             ocr_lines.append(f"Engineering Analysis:\n{desc.strip()}")
     except Exception:
         pass
 
-    if not ocr_lines:
-        ocr_lines.append(f"[Industrial Technical Schematic & Diagram: {filename}]")
-
+    # Without OCR text or a vision description the image has nothing searchable.
+    if not any(not line.startswith("Schematic Image Resolution") for line in ocr_lines):
+        return []
     return [(1, "\n\n".join(ocr_lines))]
 
 async def process_document_pipeline(
@@ -152,10 +148,10 @@ async def process_document_pipeline(
 
     # Batch embedding generation
     if all_chunks:
-        embedder = get_embedding_provider()
         texts = [c["content"] for c in all_chunks]
-        embeddings = await embedder.embed_texts(texts)
+        embeddings, embedder_id = await embed_documents(texts)
         for idx, chunk in enumerate(all_chunks):
             chunk["embedding"] = embeddings[idx]
+            chunk["embedding_model"] = embedder_id
 
     return all_chunks, len(pages)

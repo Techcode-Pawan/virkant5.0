@@ -1,66 +1,64 @@
 from typing import List
-from fastapi import APIRouter, Depends
-from app.schemas.machines import MachineResponse, MachineCreate
-from app.core.security import get_current_user, require_role, AuthenticatedUser
+
+from fastapi import APIRouter, Depends, Request
+from pymongo.errors import DuplicateKeyError
+
+from app.core.exceptions import ForgeWiseException
+from app.core.security import AuthenticatedUser, get_current_user, require_role
+from app.db.mongo import DOCUMENTS, MACHINES, get_db, iso, utcnow
+from app.schemas.machines import MachineCreate, MachineResponse
+from app.services.audit_service import record_audit
 
 router = APIRouter(prefix="/machines", tags=["Machines & Assets"])
 
-DEMO_MACHINES = [
-    {
-        "id": "PMP-402",
-        "organization_id": "c1a2b3c4-d5e6-7f80-9a0b-1c2d3e4f5a6b",
-        "name": "High-Pressure Boiler Feed Pump",
-        "manufacturer": "Flowserve",
-        "model": "HPX-150-B",
-        "plant_location": "Boiler House 2, Bay C",
-        "document_count": 2,
-        "active_issues": 0,
-        "created_at": "2026-10-15T08:00:00Z"
-    },
-    {
-        "id": "CNC-MILL-02",
-        "organization_id": "c1a2b3c4-d5e6-7f80-9a0b-1c2d3e4f5a6b",
-        "name": "5-Axis Precision Machining Center",
-        "manufacturer": "Okuma",
-        "model": "MU-5000V",
-        "plant_location": "Machining Cell 4",
-        "document_count": 3,
-        "active_issues": 1,
-        "created_at": "2026-10-16T09:30:00Z"
-    },
-    {
-        "id": "HYD-PRESS-01",
-        "organization_id": "c1a2b3c4-d5e6-7f80-9a0b-1c2d3e4f5a6b",
-        "name": "2000-Ton Hydraulic Forging Press",
-        "manufacturer": "Schuler",
-        "model": "HP-2000-M",
-        "plant_location": "Heavy Forging Bay 1",
-        "document_count": 1,
-        "active_issues": 0,
-        "created_at": "2026-10-17T11:00:00Z"
-    }
-]
+
+def _to_response(m: dict, document_count: int) -> MachineResponse:
+    return MachineResponse(
+        id=m["machine_id"],
+        organization_id=m["organization_id"],
+        name=m["name"],
+        manufacturer=m.get("manufacturer"),
+        model=m.get("model"),
+        plant_location=m.get("plant_location"),
+        document_count=document_count,
+        active_issues=0,
+        created_at=iso(m.get("created_at")),
+    )
+
 
 @router.get("", response_model=List[MachineResponse])
 async def list_machines(current_user: AuthenticatedUser = Depends(get_current_user)):
-    # Filter by user organization
-    return [m for m in DEMO_MACHINES if m["organization_id"] == current_user.organization_id]
+    db = get_db()
+    machines = [m async for m in db[MACHINES].find({"organization_id": current_user.organization_id}).sort("machine_id", 1)]
+    counts = {
+        r["_id"]: r["n"]
+        async for r in await db[DOCUMENTS].aggregate([
+            {"$match": {"workspace_id": current_user.workspace_id, "machine_id": {"$ne": None}}},
+            {"$group": {"_id": "$machine_id", "n": {"$sum": 1}}},
+        ])
+    }
+    return [_to_response(m, counts.get(m["machine_id"], 0)) for m in machines]
+
 
 @router.post("", response_model=MachineResponse, status_code=201)
 async def create_machine(
     payload: MachineCreate,
-    current_user: AuthenticatedUser = Depends(require_role("engineer"))
+    request: Request,
+    current_user: AuthenticatedUser = Depends(require_role("engineer")),
 ):
-    new_m = {
-        "id": payload.id,
+    doc = {
+        "_id": f"{current_user.organization_id}:{payload.id.strip()}",
         "organization_id": current_user.organization_id,
-        "name": payload.name,
+        "machine_id": payload.id.strip(),
+        "name": payload.name.strip(),
         "manufacturer": payload.manufacturer,
         "model": payload.model,
         "plant_location": payload.plant_location,
-        "document_count": 0,
-        "active_issues": 0,
-        "created_at": "2026-10-20T00:00:00Z"
+        "created_at": utcnow(),
     }
-    DEMO_MACHINES.append(new_m)
-    return new_m
+    try:
+        await get_db()[MACHINES].insert_one(doc)
+    except DuplicateKeyError:
+        raise ForgeWiseException(409, "DUPLICATE_MACHINE", f"Equipment '{payload.id}' already exists.")
+    await record_audit(current_user, "MACHINE_REGISTERED", "machine", doc["machine_id"], request)
+    return _to_response(doc, 0)

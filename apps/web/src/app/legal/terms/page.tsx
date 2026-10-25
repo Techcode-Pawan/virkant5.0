@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, HardHat, AlertTriangle } from "lucide-react";
+import { ArrowLeft, HardHat } from "lucide-react";
 
 export default function TermsOfUsePage() {
   return (

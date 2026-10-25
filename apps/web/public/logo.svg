@@ -1,11 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
-  <!-- Precision Industrial Hex Pin & Laser Crosshair -->
-  <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" stroke="#0ea5e9" stroke-width="3" fill="#0f172a" />
-  <circle cx="32" cy="32" r="14" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4 2" />
-  <circle cx="32" cy="32" r="4" fill="#0ea5e9" />
-  <!-- Laser Crosshairs -->
-  <line x1="32" y1="12" x2="32" y2="24" stroke="#0ea5e9" stroke-width="2" />
-  <line x1="32" y1="40" x2="32" y2="52" stroke="#0ea5e9" stroke-width="2" />
-  <line x1="12" y1="32" x2="24" y2="32" stroke="#0ea5e9" stroke-width="2" />
-  <line x1="40" y1="32" x2="52" y2="32" stroke="#0ea5e9" stroke-width="2" />
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="8" y1="6" x2="40" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9DBDF2"/>
+      <stop offset="0.55" stop-color="#5B86D6"/>
+      <stop offset="1" stop-color="#D4A64A"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="11" fill="#0F1318"/>
+  <g stroke="url(#g)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M24 6 39.6 15v18L24 42 8.4 33V15Z"/>
+    <path d="M24 15 31.8 28.5H16.2Z"/>
+    <path d="M24 15 24 6M24 15 39.6 15M24 15 8.4 15"/>
+    <path d="M31.8 28.5 39.6 15M31.8 28.5 39.6 33M31.8 28.5 24 42"/>
+    <path d="M16.2 28.5 24 42M16.2 28.5 8.4 33M16.2 28.5 8.4 15"/>
+  </g>
+  <g fill="#E6E9EE">
+    <circle cx="24" cy="15" r="1.8"/>
+    <circle cx="31.8" cy="28.5" r="1.8"/>
+    <circle cx="16.2" cy="28.5" r="1.8"/>
+  </g>
 </svg>

@@ -1,139 +1,201 @@
-# ForgeWise AI – Precision Industrial Copilot (v5.0)
+# ForgeWise AI (Vikrant 5.1)
 
-> **Enterprise Multimodal GenAI Assistant for Industrial SOPs, Heavy Machinery Diagnostics, and Frontline Operational Copiloting.**  
-> Built with Next.js 15, FastAPI, Hybrid RAG (Dense Vector + BM25 + Cross-lingual Reranking), Multi-LLM Provider Abstraction (Gemini, OpenAI, Claude, Ollama), and Three.js 3D Digital Twin Visualizer.
+Grounded AI assistant for industrial SOPs, OEM manuals and maintenance knowledge. Operators and engineers ask by chat or hands-free voice; answers cite the document and page they came from.
 
-[![Frontend](https://img.shields.io/badge/Frontend-Next.js_15_App_Router-black)](apps/web)
-[![Backend](https://img.shields.io/badge/Backend-FastAPI_0.115-009688)](apps/api)
-[![Database](https://img.shields.io/badge/Database-SQLite_Zero--Dependency_+_PostgreSQL_pgvector-336791)](supabase/migrations)
-[![Tests](https://img.shields.io/badge/Tests-18_Passed_in_0.39s-success)](apps/api/app/tests)
+- **Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS, Three.js (procedural 3D emblem)
+- **Backend**: FastAPI, PyMongo (native asyncio) on **MongoDB**
+- **AI**: provider-independent LLM service with adapters for Google Gemini, OpenAI (and any OpenAI-compatible API), Anthropic Claude and local Ollama, plus an offline mode that quotes documents verbatim
 
----
-
-## What Was Broken & How It Was Fixed (Audit & Upgrade Report)
-
-### Phase 1: Audit & Root Cause Fixes
-1. **"2 Errors" Next.js 15 Bailout Overlay on `/chat`**:
-   - *Root Cause*: Next.js 15 requires client components using `useSearchParams()` to be wrapped in `<Suspense>`. Unwrapped calls caused CSR client bailout warnings and Next.js development error overlays.
-   - *Fix*: Separated the chat component into `ChatConsoleInner` wrapped within a clean `<Suspense fallback={...}>` boundary in [apps/web/src/app/(dashboard)/chat/page.tsx](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/web/src/app/(dashboard)/chat/page.tsx).
-2. **Broken Document Upload Pipeline**:
-   - *Root Cause*: File upload input on `/documents` had broken API wiring; file uploads were not writing to disk, chunking failed on empty/scanned PDFs, database insert was disconnected from the list endpoint, and no feedback toasts were displayed.
-   - *Fix*: Re-engineered full ingestion pipeline across [apps/api/app/services/document_service.py](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/api/app/services/document_service.py) (writes to `storage/raw/...`, stores metadata in SQLite/Postgres), [apps/api/app/ingestion/pipeline.py](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/api/app/ingestion/pipeline.py), and [apps/web/src/app/(dashboard)/documents/page.tsx](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/web/src/app/(dashboard)/documents/page.tsx) with multi-stage animated toast feedback.
-3. **Database Schema Mismatch & Workspace Seeding**:
-   - *Root Cause*: Disconnected schema across 8 entities (`organizations`, `workspaces`, `users`, `equipment`, `documents`, `document_chunks` with embeddings, `chat_sessions`, `messages`, `citations`). Workspace `ws-a1111111` was unseeded.
-   - *Fix*: Unified schemas in [supabase/migrations/002_unified_schema.sql](file:///c:/Users/santo/Downloads/Vikrant%205.0/supabase/migrations/002_unified_schema.sql) and implemented zero-dependency persistent SQLite engine [apps/api/app/db/sqlite_db.py](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/api/app/db/sqlite_db.py) with automatic startup initialization and seeding for `ws-a1111111`. Added root `/health` and `/api/v1/health` endpoints.
-4. **FW Logo, OPERATOR Badge & Navigation Duplication**:
-   - *Root Cause*: Logo and role badges were hardcoded, misaligned, and overlapped navbar on mobile/dark modes. Layout had duplicate navigation bars (top header + second sub-navigation row).
-   - *Fix*: Created scalable SVG components [FWLogo.tsx](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/web/src/components/layout/FWLogo.tsx) and [RoleBadge.tsx](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/web/src/components/layout/RoleBadge.tsx), unified navbar in [Navbar.tsx](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/web/src/components/layout/Navbar.tsx) with model switcher dropdown and workspace chip, and removed redundant secondary navigation strip.
-
-### Phase 2: Multi-LLM Provider Architecture
-- Built `LLMProvider`, `EmbeddingProvider`, and `VisionProvider` interfaces supporting **Google Gemini**, **OpenAI**, **Anthropic Claude**, and **Ollama / Local**.
-- Implemented `ResilientFallbackLLMProxy` with automatic fallback to secondary provider or high-precision offline provider on failure.
-- Enabled per-request dynamic model switching from header dropdown, configurable workspace defaults, and API key management in Settings page and `.env`.
-
-### Phase 3: Manual-Grounded Multilingual Answers
-- **Multilingual Support**: First-class detection and answering in **Hindi (हिंदी)**, **Hinglish**, **Spanish**, **German**, **French**, **Japanese**, and **English**.
-- **Strict Grounding**: Zero hallucination on torque values or safety parameters. Refuses out-of-domain queries with explicit insufficient evidence notice.
-- **Clickable Citations**: Every answer provides citations with document title, page number, section title, and highlighted excerpt.
-- **Diagnostics & Multimodal**: Interactive chips (e.g. *PMP-402 Torque Specs*, *CNC Spindle Alarm E-304*, *PRV-102 Valve Chatter*), voice input, and image fault schematic analysis.
-
-### Phase 4: Professional 3D Industrial UI/UX
-- **Intro Animation**: 2.5-second cinematic diagonal laser slash split animation ([IntroAnimation.tsx](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/web/src/components/layout/IntroAnimation.tsx)) with spark particles, split reveal, ESC skip, and `sessionStorage` guard.
-- **Interactive 3D Digital Twin**: Rotating industrial impeller / pump assembly ([IndustrialHeroScene.tsx](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/web/src/components/3d/IndustrialHeroScene.tsx)) with mouse parallax, holographic wireframe, and 60fps WebGL.
-- **Equipment Hotspot Inspection**: Interactive 3D machine modal ([MachineModelViewer.tsx](file:///c:/Users/santo/Downloads/Vikrant%205.0/apps/web/src/components/3d/MachineModelViewer.tsx)) with clickable hotspots linked to SOP sections and alarms.
-- **Live Answering Timeline**: Step-by-step progress timeline ("Searching manual -> Reading page 42 -> Synthesizing grounded response").
-
-### Phase 5: Quality & Production Hardening
-- Role-based authorization (`operator`, `engineer`, `admin`) with workspace isolation.
-- Rate limiting (30 requests/min per user) and file magic-byte validation.
-- End-to-end automated test suite: 18 passed tests in 0.39s verifying upload, indexing, Hindi retrieval, citations, and out-of-scope refusal.
+```
+Browser ──▶ Next.js (:3000) ──/api/v1 proxy──▶ FastAPI (:8000) ──▶ MongoDB
+                                                   │
+                                                   └─▶ LLM service
+                                                        ├─ Gemini adapter
+                                                        ├─ OpenAI / compatible adapter
+                                                        ├─ Anthropic adapter
+                                                        ├─ Ollama adapter
+                                                        ├─ Offline extractive adapter
+                                                        ├─ Model selection
+                                                        ├─ Fallback manager (+ provider cooldown)
+                                                        ├─ Retry & timeout (bounded backoff with jitter)
+                                                        └─ Error normalisation
+```
 
 ---
 
-## Exact Commands to Run
+## 1. Prerequisites
 
-### Option A: Local Development (Instant Start)
+| Tool | Version | Notes |
+| --- | --- | --- |
+| Python | 3.11 – 3.13 | `python --version` |
+| Node.js | 20 LTS or newer | `node --version` |
+| MongoDB | 7.0 or newer (local), or a MongoDB Atlas cluster | see section 3 |
 
-#### 1. Start the FastAPI Backend
-```bash
-# From repository root:
+> **Windows:** keep the project in a short path such as `C:\dev\vikrant`. Some Python wheels (lxml, used for `.docx` uploads) fail to load when the full path exceeds 260 characters.
+
+## 2. Install and run (local development)
+
+### Backend
+
+```powershell
 cd apps/api
-
-# Activate Python virtual environment:
-# Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-# Linux / macOS:
-# source .venv/bin/activate
-
-# Install dependencies (already pre-installed in workspace .venv):
+python -m venv .venv
+.venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-
-# Run backend on port 8000:
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+copy .env.example .env            # macOS/Linux: cp .env.example .env
 ```
 
-#### 2. Start the Next.js Frontend
+Edit `apps/api/.env`: set `MONGODB_URI`, and set `JWT_SECRET` to the output of:
+
 ```bash
-# In a new terminal, from repository root:
-cd apps/web
-
-# Start Next.js dev server on port 3000:
-npm run dev
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Open `http://localhost:3000` in your browser.
+Start the API:
 
----
-
-### Option B: Docker Compose
 ```bash
-# Build and run all services (Next.js web + FastAPI + PostgreSQL pgvector + Redis)
-docker-compose up --build
-```
-- Web Application: `http://localhost:3000`
-- FastAPI Backend: `http://localhost:8000`
-- API Swagger Docs: `http://localhost:8000/docs`
-- Healthcheck: `http://localhost:8000/health`
-
----
-
-## Verification & Testing
-
-Run the full automated test suite (18 unit + integration + E2E tests):
-```bash
-# From repository root:
-apps/api/.venv/Scripts/python.exe -m pytest apps/api/app/tests -v
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Type check the Next.js frontend:
+Check it: <http://127.0.0.1:8000/api/v1/health> must show `"database": {"status": "connected", ...}`. Interactive API docs: <http://127.0.0.1:8000/docs>.
+
+### Frontend
+
 ```bash
 cd apps/web
+npm ci
+cp .env.example .env.local        # Windows: copy .env.example .env.local
+npm run dev                       # http://localhost:3000
+```
+
+Production build:
+
+```bash
+npm run build
+npm run start
+```
+
+The browser always calls `/api/v1/...` on the same origin; Next.js forwards it to `API_PROXY_TARGET` (default `http://127.0.0.1:8000`). No backend URL is compiled into the client.
+
+### Migrating data from the old SQLite file (optional, one time)
+
+Earlier versions stored chats in `apps/api/forgewise.db`. Copy them into MongoDB (idempotent, read-only on the SQLite file):
+
+```bash
+cd apps/api
+python scripts/migrate_sqlite_to_mongo.py --dry-run
+python scripts/migrate_sqlite_to_mongo.py
+```
+
+## 3. MongoDB
+
+The API needs `MONGODB_URI` and `MONGODB_DB_NAME`. It validates them at startup and refuses to start with a clear message if they are missing.
+
+**Local MongoDB**
+- Windows: install MongoDB Community Server (it runs as the "MongoDB" service), then use `MONGODB_URI=mongodb://127.0.0.1:27017`.
+- macOS: `brew install mongodb-community && brew services start mongodb-community`.
+- Docker: `docker run -d --name mongo -p 27017:27017 -v mongo_data:/data/db mongo:8.0`.
+
+**MongoDB Atlas**
+1. Create a cluster and a database user (Database Access).
+2. Network Access: add your IP address (or `0.0.0.0/0` for testing only).
+3. Connect → Drivers → copy the `mongodb+srv://` string.
+4. URL-encode special characters in the password (`@` → `%40`, `:` → `%3A`, `/` → `%2F`).
+5. `MONGODB_URI=mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority`
+
+**Behaviour**
+- One shared connection pool is created at startup and closed on shutdown.
+- On first connection the API creates indexes and seeds the default organization, the operator account `operator.rajesh@vikrant.internal`, workspace `ws-a1111111` and four pieces of equipment.
+- If MongoDB is unreachable at startup the API starts in a degraded state (or exits when `MONGODB_REQUIRED_ON_STARTUP=true`). `/api/v1/health` reports `degraded`, `/api/v1/health/ready` returns 503, and database endpoints return **503 `DATABASE_UNAVAILABLE`** instead of pretending to succeed. The driver reconnects automatically.
+- Credentials never appear in logs, health output or API errors (hosts are shown without user/password).
+
+Collections: `users`, `workspaces`, `organizations`, `machines`, `documents`, `document_chunks`, `conversations`, `messages` (citations embedded), `feedback`, `audit_logs`, `user_settings`.
+
+## 4. AI providers
+
+All providers are optional. Configure keys in `apps/api/.env` only — they are never sent to the browser.
+
+| Provider | Variables | Cost |
+| --- | --- | --- |
+| Google Gemini | `GEMINI_API_KEY`, `GEMINI_MODEL` (default `gemini-2.5-flash`) | free tier available at aistudio.google.com |
+| OpenAI | `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`) | paid |
+| OpenAI-compatible (Groq, OpenRouter, LM Studio, vLLM) | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` | varies; LM Studio is free/local |
+| Anthropic Claude | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (default `claude-haiku-5-5`) | paid |
+| Ollama (local) | `OLLAMA_BASE_URL=http://127.0.0.1:11434`, `OLLAMA_MODEL` (default `llama3.1:8b`), then `ollama pull llama3.1:8b` | free |
+
+**Model selection and fallback**
+- Request model (chat model picker) → workspace default (AI models page) → `LLM_PRIMARY_MODEL` → first configured provider (Gemini, OpenAI, Anthropic, Ollama).
+- `LLM_FALLBACK_MODELS` (comma-separated ids from `GET /api/v1/llm/models`) defines the fallback order. If empty, every other configured provider's default model is used.
+- Timeouts, HTTP 429/5xx and network errors are retried up to `LLM_MAX_RETRIES` (default 2) with exponential backoff and jitter, bounded by `LLM_TOTAL_TIMEOUT_SECONDS`. Invalid keys and bad requests move to the next model immediately.
+- A provider that keeps failing is skipped for `LLM_PROVIDER_COOLDOWN_SECONDS` while other options exist, so an outage doesn't multiply API calls.
+- Conversation history (last `CHAT_HISTORY_TURNS` messages) is sent with every request and trimmed to each model's context window, so switching models keeps context.
+- `LLM_OFFLINE_FALLBACK=true` adds a final step that quotes the best-matching document passages verbatim. It never generates text, and the UI labels it "Offline".
+
+Provider status (`/api/v1/llm/providers`, the dashboard and the **AI models** page) is honest: *Not configured* without a key/URL, *Configured, not yet used* until a real call or **Test connection** succeeds, then *Working*, *Recent errors* or *Temporarily unavailable*.
+
+Embeddings: `EMBEDDING_PROVIDER=local` (default, free, offline lexical embeddings) or `auto`/`gemini`/`openai`/`ollama`. Each stored vector records which embedder produced it, so switching providers never compares incompatible vectors.
+
+## 5. What works without API keys
+
+| Feature | Without keys | With an LLM key / Ollama |
+| --- | --- | --- |
+| Sign-in, workspaces, history, equipment, analytics, admin | yes | yes |
+| Upload and index PDF, DOCX, TXT, MD (local embeddings) | yes | yes |
+| Chat in **Documents only** mode | yes: matching passages quoted verbatim with citations | synthesized, cited answers |
+| Chat in **General assistant** mode | no: returns a clear "no AI provider configured" error | yes |
+| Voice assistant (browser speech) | yes, reading the offline answers aloud | yes |
+| Photo/schematic description | no | needs `VISION_PROVIDER` + matching key |
+
+## 6. Voice assistant
+
+Uses the browser's Web Speech API (Chrome, Edge and Safari; Firefox has no speech recognition, so typing is offered instead). It needs a secure page: `localhost` or HTTPS.
+
+- Click **Start voice session** once. It keeps listening between questions until you press **End session**, leave the page, or a real error occurs (microphone permission denied, no microphone, speech service repeatedly unreachable).
+- The end of each question is detected after a configurable silence window (default 1.4 s). The whole session can optionally stop after 5, 15 or 30 minutes of silence; the default is never.
+- When the browser ends recognition on its own (silence, network blips, platform limits), it is restarted automatically; repeated immediate failures back off and show **Reconnecting**.
+- While an answer is spoken, the microphone is paused so the assistant doesn't hear itself. **Stop speaking** interrupts immediately. Optional barge-in (talk over the answer) is available for headphone users.
+- Chrome and Edge send audio to their own cloud speech service, so recognition needs internet even when the AI model is local.
+
+## 7. Tests and checks
+
+```bash
+# Backend (needs a reachable MongoDB; uses and drops the database vikrant5_test)
+cd apps/api
+python -m pytest -q
+
+# Frontend
+cd apps/web
+npm run lint
 npx tsc --noEmit
+npm run build
 ```
 
-Verify live chat query in Hindi through the Next.js rewrite proxy:
+Set `TEST_MONGODB_URI` to run the backend tests against a MongoDB other than `mongodb://127.0.0.1:27017`.
+
+## 8. Docker Compose
+
 ```bash
-curl -s -X POST http://localhost:3000/api/v1/chat \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer mock-operator:a1111111:c1a2b3c4:ws-a1111111:sess-1" \
-  -d '{"message":"PMP-402 पंप के सील ग्लैंड बोल्ट का टॉर्क कितना होना चाहिए?","language":"hi","machine_id":"PMP-402","workspace_id":"ws-a1111111"}'
+cp apps/api/.env.example apps/api/.env   # then set JWT_SECRET and any provider keys
+docker compose up --build
 ```
 
----
+Starts MongoDB 8, the API (port 8000) and the web app (port 3000).
 
-## Default Seed Workspace & Credentials
-- **Workspace ID**: `ws-a1111111`
-- **Default Operator**: `rajesh.sharma@vikrant.internal` (Role: `operator`)
-- **Default Engineer**: `priya.nair@vikrant.internal` (Role: `engineer`)
-- **Default Organization**: `c1a2b3c4-d5e6-7f80-9a0b-1c2d3e4f5a6b`
-- **Pre-loaded Machinery**:
-  - `PMP-402`: High-Pressure Boiler Feed Pump
-  - `CNC-MILL-02`: Okuma MU-5000V 5-Axis Machining Center
-  - `HYD-PRESS-01`: 2000-Ton Hydraulic Forming Press
-  - `ROB-CELL-01`: KUKA KR-1000 Heavy Articulated Robot
+## 9. Troubleshooting
 
----
+- **`MONGODB_URI is not set`**: create `apps/api/.env` from the example.
+- **Health shows `disconnected`**: check that the server is running (local) or that your IP is allow-listed (Atlas); the `error` field explains which.
+- **`Authentication failed`**: wrong Atlas user/password, or the password needs URL-encoding.
+- **Chat says "No AI provider is configured"**: add a key or `OLLAMA_BASE_URL` to `apps/api/.env` and restart the API, or use Documents-only mode.
+- **Microphone blocked**: allow it in the site settings (padlock icon); voice requires `localhost` or HTTPS.
+- **`DLL load failed ... filename or extension is too long` (Windows)**: move the project to a shorter path.
+
+## 10. Default accounts
+
+Sign-in is passwordless (email + role) and issues a signed JWT. Demo accounts on the sign-in page: Rajesh Sharma (operator), Elena Rostova (engineer), Marcus Vance (org admin). For production, set `APPLICATION_ENV=production`, a strong `JWT_SECRET` and `ALLOW_ROLE_SELF_SELECT=false`, and put a real identity provider in front of it.
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in 5.1.
 
 ## License
-Apache 2.0. See [LICENSE](LICENSE) for details.
 
+See [LICENSE](LICENSE).

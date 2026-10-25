@@ -1,45 +1,23 @@
 services:
   # ----------------------------------------------------------------------------
-  # PostgreSQL 16 with pgvector extension
+  # MongoDB 8 — primary database
   # ----------------------------------------------------------------------------
-  db:
-    image: pgvector/pgvector:pg16
-    container_name: forgewise-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-forgewise_db}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./supabase/migrations:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d forgewise_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # ----------------------------------------------------------------------------
-  # Redis 7 for rate-limiting and task caching
-  # ----------------------------------------------------------------------------
-  redis:
-    image: redis:7-alpine
-    container_name: forgewise-redis
+  mongo:
+    image: mongo:8.0
+    container_name: forgewise-mongo
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${MONGO_PORT:-27017}:27017"
     volumes:
-      - redis_data:/data
+      - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   # ----------------------------------------------------------------------------
-  # FastAPI Application Backend
+  # FastAPI backend
   # ----------------------------------------------------------------------------
   api:
     build:
@@ -48,45 +26,37 @@ services:
     container_name: forgewise-api
     restart: unless-stopped
     depends_on:
-      db:
+      mongo:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+    env_file:
+      - ./apps/api/.env
     environment:
-      APPLICATION_ENV: development
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/forgewise_db
-      REDIS_URL: redis://redis:6379/0
-      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-auto}
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_REQUIRED_ON_STARTUP: "true"
+      # host.docker.internal reaches an Ollama running on the host machine
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
       CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
     ports:
       - "8000:8000"
     volumes:
-      - ./apps/api/app:/app/app
-      - storage_data:/app/storage_data
+      - api_storage:/app/storage
 
   # ----------------------------------------------------------------------------
-  # Next.js 15 App Router Frontend
+  # Next.js frontend (proxies /api/v1 to the api service)
   # ----------------------------------------------------------------------------
   web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://api:8000
     container_name: forgewise-web
     restart: unless-stopped
     depends_on:
       - api
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://api:8000
-      NEXT_PUBLIC_APP_NAME: "ForgeWise AI"
     ports:
       - "3000:3000"
 
 volumes:
-  postgres_data:
-  redis_data:
-  storage_data:
+  mongo_data:
+  api_storage:

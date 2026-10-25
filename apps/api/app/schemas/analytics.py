@@ -8,6 +8,7 @@ class AnalyticsOverview(BaseModel):
     unanswered_knowledge_gaps_count: int
     documents_indexed_count: int
     active_operators_count: int
+    assistant_answers_last_30d: int = 0
 
 class CommonIssueItem(BaseModel):
     machine_id: str

@@ -28,7 +28,12 @@ def setup_logging(log_level: str = "INFO"):
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(JSONFormatter())
         logger.addHandler(handler)
-        
+
+    # httpx logs full request URLs at INFO; keep provider URLs (and any query
+    # parameters) out of the logs.
+    for noisy in ("httpx", "httpcore", "pymongo"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
     return logger
 
 app_logger = setup_logging()

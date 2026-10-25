@@ -2,68 +2,155 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg-base: hsl(210, 20%, 98%);
-  --bg-surface: hsl(0, 0%, 100%);
-  --bg-elevated: hsl(210, 20%, 96%);
-  --text-primary: hsl(222, 47%, 11%);
-  --text-muted: hsl(215, 16%, 47%);
-  --border-subtle: hsl(214, 32%, 91%);
-  --border-focus: hsl(199, 89%, 48%);
-  --brand-primary: hsl(215, 28%, 17%);
-  --accent-teal: hsl(187, 85%, 38%);
-  --status-success: hsl(142, 71%, 38%);
-  --status-warning: hsl(38, 92%, 44%);
-  --status-danger: hsl(0, 84%, 48%);
+/* ---------------------------------------------------------------------------
+   Design tokens. Dark is the default; light and high-contrast are opt-in.
+   Accent = "temper blue" (the oxide colour of tempered steel);
+   straw = safety/warning only.
+--------------------------------------------------------------------------- */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-base: 15 19 24;
+  --bg-surface: 22 27 34;
+  --bg-elevated: 29 35 44;
+  --text-primary: 230 233 238;
+  --text-muted: 142 152 166;
+  --text-faint: 99 109 122;
+  --border-subtle: 37 44 54;
+  --border-strong: 52 61 73;
+  --border-focus: 123 163 234;
+  --accent: 123 163 234;
+  --accent-strong: 59 107 194;
+  --straw: 212 166 74;
+  --status-success: 79 178 134;
+  --status-warning: 212 166 74;
+  --status-danger: 224 100 100;
+  --wash: radial-gradient(1200px 600px at 12% -10%, rgb(59 107 194 / 0.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgb(212 166 74 / 0.04), transparent 55%);
 }
 
-[data-theme="dark"] {
-  --bg-base: hsl(222, 47%, 7%);
-  --bg-surface: hsl(222, 40%, 11%);
-  --bg-elevated: hsl(217, 33%, 17%);
-  --text-primary: hsl(210, 40%, 98%);
-  --text-muted: hsl(215, 20%, 65%);
-  --border-subtle: hsl(217, 33%, 20%);
-  --border-focus: hsl(199, 89%, 48%);
-  --brand-primary: hsl(210, 40%, 96%);
-  --accent-teal: hsl(187, 85%, 48%);
-  --status-success: hsl(142, 71%, 45%);
-  --status-warning: hsl(38, 92%, 50%);
-  --status-danger: hsl(0, 84%, 60%);
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-base: 244 246 249;
+  --bg-surface: 255 255 255;
+  --bg-elevated: 238 241 245;
+  --text-primary: 18 24 32;
+  --text-muted: 85 96 112;
+  --text-faint: 125 135 150;
+  --border-subtle: 223 228 234;
+  --border-strong: 201 208 217;
+  --border-focus: 47 95 179;
+  --accent: 47 95 179;
+  --accent-strong: 47 95 179;
+  --straw: 143 100 16;
+  --status-success: 31 122 82;
+  --status-warning: 143 100 16;
+  --status-danger: 180 47 47;
+  --wash: radial-gradient(1200px 600px at 12% -10%, rgb(47 95 179 / 0.06), transparent 60%);
 }
 
 [data-theme="high-contrast"] {
-  --bg-base: hsl(0, 0%, 0%);
-  --bg-surface: hsl(0, 0%, 5%);
-  --bg-elevated: hsl(0, 0%, 12%);
-  --text-primary: hsl(0, 0%, 100%);
-  --text-muted: hsl(0, 0%, 85%);
-  --border-subtle: hsl(0, 0%, 50%);
-  --border-focus: hsl(60, 100%, 50%);
-  --brand-primary: hsl(0, 0%, 100%);
-  --accent-teal: hsl(180, 100%, 50%);
-  --status-success: hsl(120, 100%, 50%);
-  --status-warning: hsl(60, 100%, 50%);
-  --status-danger: hsl(0, 100%, 50%);
+  color-scheme: dark;
+  --bg-base: 0 0 0;
+  --bg-surface: 10 10 10;
+  --bg-elevated: 26 26 26;
+  --text-primary: 255 255 255;
+  --text-muted: 224 224 224;
+  --text-faint: 192 192 192;
+  --border-subtle: 138 138 138;
+  --border-strong: 255 255 255;
+  --border-focus: 255 229 0;
+  --accent: 140 200 255;
+  --accent-strong: 0 80 184;
+  --straw: 255 229 0;
+  --status-success: 77 255 154;
+  --status-warning: 255 229 0;
+  --status-danger: 255 92 92;
+  --wash: none;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background-color: var(--bg-base);
-  color: var(--text-primary);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: rgb(var(--bg-base));
+  background-image: var(--wash);
+  background-attachment: fixed;
+  color: rgb(var(--text-primary));
+  font-family: var(--font-sans), "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: "ss01", "tnum" 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Accessibility focus indicator */
-*:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
+::selection {
+  background: rgb(123 163 234 / 0.3);
 }
 
-/* Reduced motion preference */
+*:focus-visible {
+  outline: 2px solid rgb(var(--border-focus));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Thin, quiet scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border-strong)) transparent;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 h-9 text-sm font-medium
+      transition-colors duration-150 disabled:opacity-45 disabled:cursor-not-allowed whitespace-nowrap;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-white hover:brightness-110;
+  }
+  .btn-secondary {
+    @apply btn border border-border-strong bg-surface text-txt-primary hover:bg-elevated;
+  }
+  .btn-ghost {
+    @apply btn text-txt-muted hover:text-txt-primary hover:bg-elevated;
+  }
+  .btn-danger {
+    @apply btn border border-danger/40 text-danger hover:bg-danger/10;
+  }
+  .icon-btn {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-md text-txt-muted transition-colors
+      hover:bg-elevated hover:text-txt-primary disabled:opacity-40;
+  }
+  .field {
+    @apply w-full rounded-md border border-border-strong bg-base/60 px-3 h-10 text-sm text-txt-primary
+      placeholder:text-txt-faint transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20;
+  }
+  .label {
+    @apply block text-sm font-medium text-txt-primary mb-1.5;
+  }
+  .panel {
+    @apply rounded-xl border border-border-subtle bg-surface shadow-panel;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border-subtle bg-elevated/60 px-2.5 py-0.5
+      text-xs text-txt-muted;
+  }
+  .code-id {
+    @apply font-mono text-[0.8em] tracking-tight;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
+  *,
+  ::before,
+  ::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

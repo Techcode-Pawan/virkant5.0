@@ -1,111 +1,105 @@
 "use client";
 
-import React from "react";
-import { X, ExternalLink, ShieldCheck, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
-import { Citation } from "@/types";
-import { useTranslation } from "@/lib/i18n";
+import React, { useEffect, useRef, useState } from "react";
+import { AlertTriangle, ExternalLink, X } from "lucide-react";
+import { Spinner } from "@/components/ui/primitives";
+import { getStoredToken } from "@/lib/api-client";
+import { siteConfig } from "@/lib/config";
+import type { Citation } from "@/types";
 
 interface CitationsDrawerProps {
   citation: Citation | null;
   onClose: () => void;
 }
 
+/** Opens the stored source file (auth header required, so it is fetched as a blob). */
+export async function openSourceDocument(documentId: string, page?: number) {
+  const token = getStoredToken();
+  const res = await fetch(`${siteConfig.apiBaseUrl}/api/v1/documents/${encodeURIComponent(documentId)}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(res.status === 404 ? "The source file is no longer available." : "Could not open the source file.");
+  const url = URL.createObjectURL(await res.blob());
+  window.open(page ? `${url}#page=${page}` : url, "_blank", "noopener");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export default function CitationsDrawer({ citation, onClose }: CitationsDrawerProps) {
-  const { locale, t } = useTranslation();
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!citation) return;
+    setError(null);
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [citation, onClose]);
 
   if (!citation) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end">
-      <div className="w-full max-w-lg bg-surface border-l border-border-subtle h-full shadow-2xl flex flex-col p-6 overflow-y-auto animate-in slide-in-from-right duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-border-subtle">
-          <div className="flex items-center space-x-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded bg-teal/15 text-teal">
-              <FileText className="h-4 w-4" />
-            </span>
-            <div>
-              <h3 className="font-semibold text-sm text-txt-primary">
-                {t("chat.citationsHeader")}
-              </h3>
-              <p className="font-mono text-xs text-txt-muted">
-                {t("chat.page")} {citation.page_number}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md text-txt-muted hover:text-txt-primary hover:bg-elevated"
-            aria-label="Close citations drawer"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Content Body */}
-        <div className="mt-6 space-y-6 flex-1">
-          {/* Document metadata card */}
-          <div className="rounded-lg border border-border-subtle bg-elevated/40 p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-xs uppercase tracking-wider text-txt-muted">
-                Source Document
-              </span>
-              <span className="flex items-center gap-1 rounded bg-success/15 px-2 py-0.5 text-xs font-mono font-medium text-success">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Verified Grounding
-              </span>
-            </div>
-            <h4 className="font-medium text-sm text-txt-primary">
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div aria-hidden className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="citation-title"
+        className="relative flex h-full w-full max-w-md flex-col border-l border-border-subtle bg-surface"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-xs text-txt-muted">Source, page {citation.page_number}</p>
+            <h3 id="citation-title" className="mt-0.5 text-[0.9375rem] font-semibold text-txt-primary">
               {citation.document_title}
-            </h4>
-            {citation.section_title && (
-              <p className="text-xs text-teal font-mono">
-                {citation.section_title}
-              </p>
-            )}
+            </h3>
+            {citation.section_title && <p className="mt-0.5 text-sm text-txt-muted">{citation.section_title}</p>}
           </div>
-
-          {/* Verbatim Excerpt */}
-          <div className="space-y-2">
-            <label className="font-mono text-xs uppercase tracking-wider text-txt-muted block">
-              Document Excerpt
-            </label>
-            <div className="rounded-lg border border-border-subtle bg-surface p-4 text-sm leading-relaxed text-txt-primary border-l-4 border-l-teal font-mono">
-              &quot;{citation.excerpt}&quot;
-            </div>
-          </div>
-
-          {/* Safety Notice */}
-          <div className="rounded-lg border border-warning/30 bg-warning/5 p-4 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-            <div className="text-xs leading-relaxed text-txt-primary">
-              <strong className="font-semibold text-warning block mb-1">
-                EHS Operational Caution:
-              </strong>
-              Cross-check all hydraulic ratings, electrical schemas, and torque values against the physical machine nameplate and approved plant SOP before executing maintenance.
-            </div>
-          </div>
-        </div>
-
-        {/* Footer Actions */}
-        <div className="pt-4 border-t border-border-subtle flex items-center justify-between">
-          <a
-            href={`http://localhost:8000/api/v1/documents/${citation.document_id}/pages/${citation.page_number}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs font-medium text-teal hover:underline"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            {t("chat.inspectSource")}
-          </a>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-md bg-elevated text-xs font-medium text-txt-primary hover:bg-elevated/80"
-          >
-            Dismiss
+          <button ref={closeRef} onClick={onClose} className="icon-btn -mr-2" aria-label="Close source">
+            <X className="h-4 w-4" />
           </button>
         </div>
-      </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+          <blockquote className="border-l-2 border-accent pl-4 text-sm leading-relaxed text-txt-primary">
+            {citation.excerpt}
+          </blockquote>
+          {typeof citation.relevance_score === "number" && (
+            <p className="text-xs text-txt-faint">Relative match strength {Math.round(citation.relevance_score * 100)}% among the excerpts used for this answer.</p>
+          )}
+          <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/[0.06] px-3.5 py-3 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <p className="text-txt-muted">
+              Check ratings, torque values and wiring against the machine nameplate and the approved SOP before starting work.
+            </p>
+          </div>
+          {error && <p className="text-sm text-danger">{error}</p>}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-border-subtle px-5 py-3">
+          <button
+            onClick={async () => {
+              setOpening(true);
+              setError(null);
+              try {
+                await openSourceDocument(citation.document_id, citation.page_number);
+              } catch (err: any) {
+                setError(err.message);
+              } finally {
+                setOpening(false);
+              }
+            }}
+            disabled={opening}
+            className="btn-secondary"
+          >
+            {opening ? <Spinner /> : <ExternalLink className="h-4 w-4" />}
+            Open source file
+          </button>
+          <button onClick={onClose} className="btn-ghost">Close</button>
+        </div>
+      </aside>
     </div>
   );
 }

@@ -1,12 +1,9 @@
-import React from "react";
+import { Loader2 } from "lucide-react";
 
 export default function Loading() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3">
-      <div className="h-8 w-8 rounded-full border-2 border-teal border-t-transparent animate-spin" />
-      <span className="font-mono text-xs uppercase tracking-wider text-txt-muted">
-        Loading Facility Knowledge System...
-      </span>
+    <div className="flex min-h-[50vh] items-center justify-center gap-2 text-sm text-txt-muted">
+      <Loader2 className="h-4 w-4 animate-spin" /> Loading
     </div>
   );
 }
