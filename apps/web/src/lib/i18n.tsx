@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import enMessages from "../messages/en.json";
 import hiMessages from "../messages/hi.json";
-
-export type LanguageCode = "en" | "hi";
+import { LanguageCode } from "@/types";
+export type { LanguageCode };
 
 type MessagesType = typeof enMessages;
 
@@ -15,7 +15,7 @@ interface I18nContextType {
   messages: MessagesType;
 }
 
-const translations: Record<LanguageCode, MessagesType> = {
+const translations: Record<string, MessagesType> = {
   en: enMessages,
   hi: hiMessages as unknown as MessagesType,
 };
@@ -32,7 +32,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem("forgewise_lang") as LanguageCode | null;
-    if (saved && (saved === "en" || saved === "hi")) {
+    if (saved && ["en", "hi", "es", "de", "fr", "ja"].includes(saved)) {
       setLocaleState(saved);
     }
   }, []);
@@ -44,7 +44,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   const t = (path: string): string => {
     const keys = path.split(".");
-    let current: any = translations[locale];
+    let current: any = translations[locale] || translations.en;
     for (const key of keys) {
       if (current && typeof current === "object" && key in current) {
         current = current[key];
@@ -65,7 +65,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <I18nContext.Provider value={{ locale, setLocale, t, messages: translations[locale] }}>
+    <I18nContext.Provider value={{ locale, setLocale, t, messages: translations[locale] || translations.en }}>
       {children}
     </I18nContext.Provider>
   );

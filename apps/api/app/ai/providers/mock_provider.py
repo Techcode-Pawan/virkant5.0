@@ -5,9 +5,12 @@ from app.ai.provider_interfaces import LLMProvider, EmbeddingProvider, VisionPro
 
 class MockAIProvider(LLMProvider, EmbeddingProvider, VisionProvider):
     """
-    Deterministic, high-fidelity mock provider for offline testing,
-    continuous integration, and fresh zero-key deployment.
+    Deterministic, high-fidelity mock provider supporting multi-LLM,
+    multi-language capabilities, and dynamic custom SOP manual grounding.
     """
+
+    def __init__(self, model_name: str = "gemini-2.5-flash"):
+        self.model_name = model_name
 
     def _hash_to_vector(self, text: str, dim: int = 1536) -> List[float]:
         # Generate pseudo-random deterministic vector based on text hash
@@ -34,14 +37,82 @@ class MockAIProvider(LLMProvider, EmbeddingProvider, VisionProvider):
         max_tokens: int = 1500
     ) -> str:
         prompt_lower = prompt.lower()
-        is_hindi = "हिंदी" in system_instruction or "language requirement:\nrespond in natural, technically accurate hindi" in system_instruction.lower()
+        sys_lower = system_instruction.lower()
 
-        # Check if chunks are empty or no relevant match
-        out_of_scope_terms = ["cake", "recipe", "bake", "weather", "movie", "song", "joke"]
+        # Detect language requirement
+        is_hindi = "target_locale: hi" in sys_lower or "hindi" in sys_lower
+        is_spanish = "target_locale: es" in sys_lower or "español" in sys_lower or "spanish" in sys_lower
+        is_german = "target_locale: de" in sys_lower or "deutsch" in sys_lower or "german" in sys_lower
+        is_french = "target_locale: fr" in sys_lower or "français" in sys_lower or "french" in sys_lower
+        is_japanese = "target_locale: ja" in sys_lower or "日本語" in sys_lower or "japanese" in sys_lower
+
+        # Check if chunks are empty or query is out of domain
+        out_of_scope_terms = [
+            "cake", "recipe", "bake", "weather", "movie", "song", "joke", "pizza", "football",
+            "केक", "रेसिपी", "चॉकलेट", "मौसम", "फिल्म", "गाना", "चुटकुला",
+            "receta", "pastel", "gâteau", "kuchen", "wetter", "météo", "tiempo"
+        ]
         if "<document_chunk" not in prompt or any(term in prompt_lower for term in out_of_scope_terms):
             if is_hindi:
                 return "उपलब्ध दस्तावेज़ों में इस प्रश्न के लिए कोई सत्यापित जानकारी नहीं मिली। कृपया प्लांट इंजीनियर से संपर्क करें।"
+            if is_spanish:
+                return "La documentación disponible no proporciona procedimientos verificados para esta consulta. Por favor, consulte con la ingeniería de la planta o el manual del fabricante."
+            if is_german:
+                return "Die verfügbare Dokumentation enthält keine verifizierten Verfahren für diese Anfrage. Bitte wenden Sie sich an die Werksleitung oder das OEM-Handbuch."
+            if is_french:
+                return "La documentation disponible ne fournit pas de procédures vérifiées pour cette requête. Veuillez consulter l'ingénierie de l'usine ou le manuel OEM."
+            if is_japanese:
+                return "利用可能なマニュアルには、この問い合わせに対する検証済みの手順が記載されていません。プラント技術担当者に確認してください。"
             return "The available documentation does not provide verified procedures for this query. Please consult plant engineering or refer to the physical OEM manual."
+
+        # Scenario 0: Custom Ingested SOP Manual in the active Workspace!
+        if "[custom sop]" in prompt_lower or "<document_chunk id=" in prompt:
+            # Check if this prompt includes a custom SOP chunk
+            chunks_raw = prompt.split("<document_chunk")
+            custom_chunk_found = None
+            for ch in chunks_raw[1:]:
+                if "custom sop" in ch.lower() or "[custom" in ch.lower():
+                    custom_chunk_found = ch
+                    break
+
+            if custom_chunk_found:
+                title_part = "Custom SOP Manual"
+                if 'title="' in custom_chunk_found:
+                    title_part = custom_chunk_found.split('title="')[1].split('"')[0]
+                page_part = "1"
+                if 'page="' in custom_chunk_found:
+                    page_part = custom_chunk_found.split('page="')[1].split('"')[0]
+                content_text = custom_chunk_found.split(">")[1].split("</document_chunk>")[0].strip()
+
+                if is_hindi:
+                    return (
+                        f"आपके अपलोड किए गए कस्टम एसओपी ({title_part}, पृष्ठ {page_part}) के अनुसार:\n\n"
+                        f"{content_text}\n\n"
+                        f"**सुरक्षा चेतावनी**: किसी भी संयंत्र रखरखाव से पहले मानक LOTO और पीपीई प्रोटोकॉल का अनुपालन करें।"
+                    )
+                if is_spanish:
+                    return (
+                        f"Según su manual SOP personalizado ({title_part}, Página {page_part}):\n\n"
+                        f"Especificación de Torque (patrón de estrella):\n{content_text}\n\n"
+                        f"**Seguridad obligatoria**: Asegúrese de aplicar los protocolos LOTO antes de intervenir el equipo."
+                    )
+                if is_german:
+                    return (
+                        f"Gemäß Ihrem hochgeladenen SOP-Handbuch ({title_part}, Seite {page_part}):\n\n"
+                        f"{content_text}\n\n"
+                        f"**Sicherheitshinweis**: Vor Beginn der Arbeiten ist die LOTO-Abschaltung zwingend durchzuführen."
+                    )
+                if is_french:
+                    return (
+                        f"Selon votre manuel SOP personnalisé ({title_part}, Page {page_part}) :\n\n"
+                        f"{content_text}\n\n"
+                        f"**Avertissement de sécurité** : Respectez scrupuleusement la procédure de consignation LOTO avant toute intervention."
+                    )
+                return (
+                    f"According to your uploaded custom SOP ({title_part}, Page {page_part}):\n\n"
+                    f"{content_text}\n\n"
+                    f"**Safety Requirement**: Strictly execute facility Lockout/Tagout (LOTO) protocols and inspect personal protective gear before executing these steps."
+                )
 
         # Scenario 1: Pump PMP-402 / Torque / Mechanical Seal
         if "torque" in prompt_lower or "pmp-402" in prompt_lower or "mechanical seal" in prompt_lower or "सील" in prompt_lower:
@@ -51,6 +122,20 @@ class MockAIProvider(LLMProvider, EmbeddingProvider, VisionProvider):
                     "1. **टॉर्क विनिर्देश (Torque Specification)**: कार्ट्रिज मैकेनिकल सील ग्लैंड बोल्ट को स्टार पैटर्न में बिल्कुल **48 Nm (35.4 ft-lb)** पर टॉर्क किया जाना चाहिए। इससे अधिक टॉर्क देने पर सील फेस विकृत हो जाती है और तत्काल रिसाव होता है।\n"
                     "2. **सील फ्लश तापमान (Plan 23 Flush)**: सुनिश्चित करें कि तापमान **65°C** से अधिक न हो।\n"
                     "3. **सुरक्षा चेतावनी (Mandatory LOTO)**: किसी भी ग्लैंड नट को ढीला करने से पहले सक्शन और डिस्चार्ज वाल्व को पूरी तरह से बंद और लॉकआउट/टैगआउट (LOTO) करें।"
+                )
+            if is_spanish:
+                return (
+                    "Según el manual de mantenimiento de la bomba de alimentación PMP-402:\n\n"
+                    "1. **Especificación de Torque**: Los pernos del prensaestopas del sello mecánico deben apretarse en patrón de estrella a exactamente **48 Nm (35.4 ft-lb)**. Un torque excesivo deforma la cara del sello provocando fugas inmediatas.\n"
+                    "2. **Monitoreo de Enfriamiento (Plan 23)**: Verifique que la temperatura no supere los **65°C**.\n"
+                    "3. **ADVERTENCIA DE SEGURIDAD**: Aísle y aplique LOTO a las válvulas de succión y descarga antes de aflojar fijaciones."
+                )
+            if is_german:
+                return (
+                    "Gemäß dem Wartungshandbuch der Kesselspeisepumpe PMP-402:\n\n"
+                    "1. **Drehmomentspezifikation**: Die Stopfbuchsenschrauben der Gleitringdichtung müssen im Sternmuster auf genau **48 Nm (35,4 ft-lb)** angezogen werden. Ein übermäßiges Drehmoment führt zu Verzug der Dichtfläche und sofortiger Leckage.\n"
+                    "2. **Spülplantemperatur (Plan 23)**: Sicherstellen, dass die Temperatur **65°C** nicht überschreitet.\n"
+                    "3. **SICHERHEITSHINWEIS**: Vor dem Lösen von Schrauben sind Saug- und Druckarmaturen vollständig abzusperren und nach LOTO zu sichern."
                 )
             return (
                 "Based on the Boiler Feed Pump PMP-402 Maintenance SOP:\n\n"
@@ -69,6 +154,15 @@ class MockAIProvider(LLMProvider, EmbeddingProvider, VisionProvider):
                     "1. जांचें कि बाहरी चिल्लर पंखा स्वतंत्र रूप से घूम रहा है और रेडिएटर फिन्स (radiator fins) साफ हैं।\n"
                     "2. कूलेंट प्रवाह दर (circulation flow rate) को **14.5 से 18.0 L/min** के बीच सत्यापित करें।\n"
                     "3. **सावधानी**: अलार्म E-304 सक्रिय रहने पर स्पिंडल को 3000 RPM से ऊपर न चलाएं।"
+                )
+            if is_spanish:
+                return (
+                    "Según el manual de diagnóstico de husillo Okuma MU-5000V:\n\n"
+                    "El código de alarma **E-304** se activa cuando la temperatura del refrigerante del husillo supera los **88°C** durante más de 45 segundos.\n\n"
+                    "**Pasos diagnósticos**:\n"
+                    "1. Confirme que el ventilador del enfriador gira libremente y que las aletas del radiador no estén obstruidas.\n"
+                    "2. Verifique que el caudal de circulación esté entre **14.5 y 18.0 L/min**.\n"
+                    "3. **PRECAUCIÓN**: No opere el husillo a más de 3000 RPM mientras persista la alarma E-304."
                 )
             return (
                 "According to the Okuma MU-5000V Spindle & Cooling Diagnostic Manual:\n\n"
@@ -102,9 +196,11 @@ class MockAIProvider(LLMProvider, EmbeddingProvider, VisionProvider):
 
         # General Grounded Response fallback using snippet from chunk
         first_chunk = prompt.split("<document_chunk")[1].split("</document_chunk>")[0]
-        text_sample = first_chunk.split(">")[1].strip()[:200]
+        text_sample = first_chunk.split(">")[1].strip()[:240]
         if is_hindi:
             return f"सत्यापित औद्योगिक रिकॉर्ड के अनुसार:\n\n{text_sample}...\n\n(कृपया कार्य करने से पहले प्लांट सुरक्षा नियमों और LOTO प्रक्रियाओं का पालन करें।)"
+        if is_spanish:
+            return f"Según la documentación técnica verificada:\n\n{text_sample}...\n\n(Asegúrese de aplicar los protocolos LOTO antes de intervenir el equipo.)"
         return f"Based on the verified documentation:\n\n{text_sample}...\n\n(Ensure Lockout/Tagout procedures are followed before servicing equipment.)"
 
     async def describe_schematic(

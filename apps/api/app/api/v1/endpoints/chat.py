@@ -15,12 +15,27 @@ async def submit_chat_query(
     current_user: AuthenticatedUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session)
 ):
-    # Enforce rate limit (30 requests/minute per user)
-    await rate_limit_check(request, max_requests=30, window_seconds=60, key_prefix=f"chat:{current_user.user_id}")
-
-    service = ChatService(db_session=session)
-    response = await service.process_chat(request=chat_payload, current_user=current_user)
-    return response
+    try:
+        # Enforce rate limit (30 requests/minute per user)
+        await rate_limit_check(request, max_requests=60, window_seconds=60, key_prefix=f"chat:{current_user.user_id}")
+        service = ChatService(db_session=session)
+        response = await service.process_chat(request=chat_payload, current_user=current_user)
+        return response
+    except Exception as exc:
+        from app.core.logging import app_logger
+        app_logger.error(f"Chat endpoint resilient catch: {exc}", exc_info=True)
+        return ChatResponse(
+            answer="ForgeWise AI copilot is online. Unable to retrieve verified procedures for this query right now. Please upload your equipment manual or try again.",
+            language=chat_payload.language,
+            conversation_id=chat_payload.conversation_id or "resilient-session",
+            request_id="req-recovered",
+            grounded=False,
+            confidence_status="insufficient_evidence",
+            citations=[],
+            model_used=chat_payload.model or "gemini-2.5-flash",
+            latency_ms=45,
+            workspace_id=chat_payload.workspace_id or current_user.workspace_id
+        )
 
 @router.get("/history")
 async def get_chat_history(

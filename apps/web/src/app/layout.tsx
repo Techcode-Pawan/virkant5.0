@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme";
 import { I18nProvider } from "@/lib/i18n";
+import { SessionProvider } from "@/lib/session";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { siteConfig } from "@/lib/config";
 
 export const metadata: Metadata = {
-  title: `${siteConfig.brandName} — Industrial Multimodal Knowledge Assistant`,
+  title: `${siteConfig.brandName} — Precision Industrial Copilot`,
   description:
-    "Search Standard Operating Procedures, OEM manuals, engineering schematics, and expert maintenance knowledge through one grounded, bilingual AI copilot.",
+    "Search Standard Operating Procedures, OEM manuals, engineering schematics, and expert maintenance knowledge through one grounded, multilingual AI copilot.",
   icons: {
     icon: "/favicon.ico",
   },
@@ -25,9 +26,11 @@ export default function RootLayout({
       <body className="min-h-screen flex flex-col bg-base text-txt-primary">
         <ThemeProvider>
           <I18nProvider>
-            <Navbar />
-            <div className="flex-1">{children}</div>
-            <Footer />
+            <SessionProvider>
+              <Navbar />
+              <div className="flex-1">{children}</div>
+              <Footer />
+            </SessionProvider>
           </I18nProvider>
         </ThemeProvider>
       </body>

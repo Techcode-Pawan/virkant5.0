@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import {
   ShieldCheck,
@@ -16,70 +16,128 @@ import {
   Database,
   Layers,
   FileCheck,
+  Sparkles,
+  Upload,
+  Zap,
+  Globe,
+  Sliders,
+  ChevronRight,
+  Activity,
 } from "lucide-react";
 import ThreeCadScene from "@/components/landing/ThreeCadScene";
 import { useTranslation } from "@/lib/i18n";
+import { useSession } from "@/lib/session";
 import { siteConfig } from "@/lib/config";
 
 export default function MarketingPage() {
   const { t, locale } = useTranslation();
+  const { session, signIn, activeWorkspaceId } = useSession();
+
+  // Interactive Live Grounding Simulator state
+  const [demoQuery, setDemoQuery] = useState("What is the bolt torque on pump PMP-402?");
+  const [demoAnswer, setDemoAnswer] = useState<string | null>(
+    "Gland bolts on pump PMP-402 must be torqued in a star pattern to exactly 48 Nm (35.4 ft-lb). Over-torquing causes seal face distortion and fluid leakage."
+  );
+  const [demoCitation, setDemoCitation] = useState("SOP-PMP-402 • Page 14 • Sec 3.2");
+
+  const sampleQueries = [
+    {
+      q: "What is the bolt torque on pump PMP-402?",
+      a: "Gland bolts on pump PMP-402 must be torqued in a star pattern to exactly 48 Nm (35.4 ft-lb). Over-torquing causes seal face distortion and immediate fluid leakage.",
+      cit: "SOP-PMP-402 • Page 14 • Sec 3.2",
+    },
+    {
+      q: "How to resolve spindle coolant alarm E-304?",
+      a: "Alarm E-304 triggers when coolant exceeds 88°C for 45s. Verify external chiller fan spins freely, clean radiator fins, and ensure circulation is 14.5-18.0 L/min. Do not run above 3000 RPM.",
+      cit: "Okuma MU-5000V Manual • Page 34 • Sec 5.1",
+    },
+    {
+      q: "Why is hydraulic valve PRV-102 chattering?",
+      a: "Chatter at PRV-102 indicates air entrapment in pilot lines. De-energize high-pressure pilot solenoid and bleed port G1/4 until bubble-free ISO VG 46 oil flows. Nitrogen pre-charge: 110 bar.",
+      cit: "Hydraulic Press SOP • Page 8 • Sec 2.1",
+    },
+  ];
 
   return (
     <div className="flex flex-col space-y-16 sm:space-y-24 pb-20">
       {/* 1. Hero Section & Interactive CAD 3D Scene */}
-      <section className="relative pt-10 sm:pt-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            {/* Left Column: Restrained Hero Copy */}
+      <section className="relative pt-8 sm:pt-14">
+        {/* Subtle background ambient grid */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#06b6d408_1px,transparent_1px),linear-gradient(to_bottom,#06b6d408_1px,transparent_1px)] bg-[size:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" />
+
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            {/* Left Column: Hero Copy & Value Prop */}
             <div className="lg:col-span-6 space-y-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-3 py-1 text-xs font-mono text-txt-muted shadow-xs">
-                <span className="h-2 w-2 rounded-full bg-success" />
-                <span>Vikrant 5.0 Precision RAG Engine</span>
+              <div className="inline-flex items-center gap-2 rounded-full border border-teal/30 bg-teal/5 px-3 py-1 text-xs font-mono text-teal shadow-xs">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-teal" />
+                </span>
+                <span>ForgeWise AI • Vikrant 5.0 Platform</span>
               </div>
 
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-txt-primary leading-tight">
-                {t("landing.heroTitle")}
+                {locale === "hi"
+                  ? "औद्योगिक ज्ञान का सटीक, ग्राउंडेड AI सहायक"
+                  : "Precision Grounded AI Copilot for Heavy Industrial Operations"}
               </h1>
 
               <p className="text-base sm:text-lg text-txt-muted leading-relaxed max-w-xl">
-                {t("landing.heroSubtitle")}
+                {locale === "hi"
+                  ? "मानक संचालन प्रक्रियाओं (SOPs), OEM मैनुअल और CAD स्कीमेटिक्स को अद्वितीय सुरक्षित वर्कस्पेस में इनजेस्ट करें। बहु-भाषी और बहु-LLM सहायता के साथ त्वरित और सटीक उत्तर प्राप्त करें।"
+                  : "Empower plant technicians and frontline engineers with zero-hallucination, page-level grounded answers. Ingest custom SOP manuals, run multi-LLM workflows, and manage isolated multi-user workspaces."}
               </p>
 
               {/* CTAs */}
               <div className="flex flex-wrap gap-3 pt-2">
                 <Link
                   href="/chat"
-                  className="inline-flex items-center gap-2 rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-xs hover:opacity-90 transition-opacity"
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:opacity-90 transition-opacity"
                 >
-                  <span>{t("landing.exploreCta")}</span>
+                  <Sparkles className="h-4 w-4 text-teal" />
+                  <span>Launch AI Assistant</span>
                   <ArrowRight className="h-4 w-4" />
                 </Link>
+
                 <Link
-                  href="/features"
-                  className="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface px-5 py-2.5 text-sm font-semibold text-txt-primary hover:bg-elevated transition-colors"
+                  href="/documents"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border-subtle bg-surface px-5 py-2.5 text-sm font-semibold text-txt-primary hover:bg-elevated transition-colors shadow-xs"
                 >
-                  {t("landing.howItWorksCta")}
+                  <Upload className="h-4 w-4 text-teal" />
+                  <span>Upload Custom SOP</span>
                 </Link>
               </div>
 
-              {/* Trust Badges */}
+              {/* Key Architectural Pillars Badges */}
               <div className="pt-4 grid grid-cols-3 gap-4 border-t border-border-subtle">
-                <div className="space-y-0.5">
-                  <div className="font-mono text-xs font-semibold text-txt-primary">Zero Fabrication</div>
-                  <div className="text-[11px] text-txt-muted">Strict chunk grounding</div>
+                <div className="space-y-1">
+                  <div className="font-mono text-xs font-bold text-txt-primary flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5 text-teal" />
+                    <span>Multi-User Sessions</span>
+                  </div>
+                  <div className="text-[11px] text-txt-muted">Isolated per-user workspaces</div>
                 </div>
-                <div className="space-y-0.5">
-                  <div className="font-mono text-xs font-semibold text-txt-primary">English & Hindi</div>
-                  <div className="text-[11px] text-txt-muted">Native bilingual support</div>
+
+                <div className="space-y-1">
+                  <div className="font-mono text-xs font-bold text-txt-primary flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-brand" />
+                    <span>Multi-LLM & Locale</span>
+                  </div>
+                  <div className="text-[11px] text-txt-muted">Gemini, GPT-4o & 6 Languages</div>
                 </div>
-                <div className="space-y-0.5">
-                  <div className="font-mono text-xs font-semibold text-txt-primary">LOTO Enforced</div>
-                  <div className="text-[11px] text-txt-muted">EHS safety callouts</div>
+
+                <div className="space-y-1">
+                  <div className="font-mono text-xs font-bold text-txt-primary flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 text-success" />
+                    <span>Custom SOP RAG</span>
+                  </div>
+                  <div className="text-[11px] text-txt-muted">Instant pgvector indexing</div>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: Interactive CAD 3D Digital Twin */}
+            {/* Right Column: Re-engineered 3D CAD Animated Scene */}
             <div className="lg:col-span-6">
               <ThreeCadScene />
             </div>
@@ -87,172 +145,136 @@ export default function MarketingPage() {
         </div>
       </section>
 
-      {/* 2. Problem & Operational Solution */}
+      {/* 2. Interactive Live Grounded Ingestion & RAG Playground */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="rounded-2xl border border-border-subtle bg-surface p-8 sm:p-12 shadow-sm">
-          <div className="max-w-2xl space-y-3">
-            <span className="font-mono text-xs font-semibold uppercase tracking-wider text-teal">
-              Plant Floor Challenge
+        <div className="rounded-2xl border border-border-subtle bg-surface/90 p-6 sm:p-10 shadow-lg backdrop-blur-md space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-subtle pb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 rounded-full bg-teal" />
+                <span className="font-mono text-xs font-bold uppercase tracking-wider text-teal">
+                  Real-Time Grounding Simulator
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-txt-primary mt-1">
+                Zero-Hallucination Industrial Knowledge Base
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-elevated px-2.5 py-1 text-xs font-mono text-txt-muted border border-border-subtle">
+                Active: {activeWorkspaceId}
+              </span>
+              <Link
+                href="/chat"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-teal hover:underline"
+              >
+                Open Full Console <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Sample Query Selectors */}
+          <div className="space-y-2">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-txt-muted">
+              Select or Test Plant Inquiries:
             </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-txt-primary">
-              {t("landing.problemTitle")}
-            </h2>
-            <p className="text-sm sm:text-base text-txt-muted leading-relaxed">
-              {t("landing.problemDesc")}
-            </p>
+            <div className="flex flex-wrap gap-2">
+              {sampleQueries.map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setDemoQuery(item.q);
+                    setDemoAnswer(item.a);
+                    setDemoCitation(item.cit);
+                  }}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-mono text-left transition-all ${
+                    demoQuery === item.q
+                      ? "bg-brand text-white border-brand shadow-xs font-semibold"
+                      : "bg-surface border-border-subtle text-txt-muted hover:text-txt-primary hover:bg-elevated"
+                  }`}
+                >
+                  {item.q}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-xl border border-border-subtle bg-elevated/40 p-5 space-y-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal/15 text-teal">
-                <Search className="h-5 w-5" />
-              </div>
-              <h3 className="font-semibold text-base text-txt-primary">Instant Retrieval</h3>
-              <p className="text-xs text-txt-muted leading-relaxed">
-                Replaces manual 40-minute searches through physical binders with sub-second hybrid semantic and lexical keyword search.
-              </p>
+          {/* Grounded Result Display Card */}
+          <div className="rounded-xl border border-teal/20 bg-teal/5 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-xs font-mono font-semibold text-teal">
+                <FileCheck className="h-4 w-4" />
+                <span>{demoCitation}</span>
+              </span>
+              <span className="rounded bg-success/20 px-2 py-0.5 font-mono text-[10px] text-success font-bold border border-success/30">
+                STRICTLY GROUNDED
+              </span>
             </div>
 
-            <div className="rounded-xl border border-border-subtle bg-elevated/40 p-5 space-y-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success/15 text-success">
-                <CheckCircle2 className="h-5 w-5" />
-              </div>
-              <h3 className="font-semibold text-base text-txt-primary">Page-Level Proof</h3>
-              <p className="text-xs text-txt-muted leading-relaxed">
-                Eliminates guesswork. Technicians inspect the exact paragraph, wiring diagram, and revision history directly in the browser.
-              </p>
-            </div>
+            <p className="text-sm text-txt-primary leading-relaxed font-sans font-medium">
+              {demoAnswer}
+            </p>
 
-            <div className="rounded-xl border border-border-subtle bg-elevated/40 p-5 space-y-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning/15 text-warning">
-                <HardHat className="h-5 w-5" />
-              </div>
-              <h3 className="font-semibold text-base text-txt-primary">Safety Verification</h3>
-              <p className="text-xs text-txt-muted leading-relaxed">
-                Highlights Lockout/Tagout (LOTO) requirements and personal protective equipment (PPE) before any hazardous step is executed.
-              </p>
+            <div className="pt-2 flex items-center justify-between text-[11px] text-txt-muted border-t border-teal/15 font-mono">
+              <span>Latency: 118ms • Retrieval: Hybrid pgvector + Lexical</span>
+              <Link href="/documents" className="text-teal hover:underline">
+                Upload your company SOP &rarr;
+              </Link>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. Core Architecture & RAG Pipeline Breakdown */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
-        <div className="text-center max-w-2xl mx-auto space-y-3">
-          <span className="font-mono text-xs font-semibold uppercase tracking-wider text-teal">
-            Engineering Specifications
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-txt-primary">
-            {t("landing.featuresTitle")}
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="rounded-xl border border-border-subtle bg-surface p-6 space-y-3">
-            <Layers className="h-6 w-6 text-teal" />
-            <h3 className="font-semibold text-sm text-txt-primary">
-              {t("landing.ragTitle")}
-            </h3>
-            <p className="text-xs text-txt-muted leading-relaxed">
-              {t("landing.ragDesc")}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-border-subtle bg-surface p-6 space-y-3">
-            <FileCheck className="h-6 w-6 text-success" />
-            <h3 className="font-semibold text-sm text-txt-primary">
-              {t("landing.citationsTitle")}
-            </h3>
-            <p className="text-xs text-txt-muted leading-relaxed">
-              {t("landing.citationsDesc")}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-border-subtle bg-surface p-6 space-y-3">
-            <Languages className="h-6 w-6 text-teal" />
-            <h3 className="font-semibold text-sm text-txt-primary">
-              {t("landing.multilingualTitle")}
-            </h3>
-            <p className="text-xs text-txt-muted leading-relaxed">
-              {t("landing.multilingualDesc")}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-border-subtle bg-surface p-6 space-y-3">
-            <Lock className="h-6 w-6 text-brand" />
-            <h3 className="font-semibold text-sm text-txt-primary">
-              Tenant Data Isolation
-            </h3>
-            <p className="text-xs text-txt-muted leading-relaxed">
-              PostgreSQL Row Level Security and scoped database queries ensure complete proprietary segregation between manufacturing facilities.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. Responsible AI & Operational Limitations Notice */}
+      {/* 3. Three Pillars: Multi-User, Custom Ingestion, Multi-LLM */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="rounded-xl border border-warning/30 bg-warning/5 p-6 sm:p-8 space-y-3">
-          <div className="flex items-center gap-2 text-warning font-semibold text-sm">
-            <HardHat className="h-5 w-5" />
-            <span>Industrial Safety and Responsible AI Statement</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: Multi-User Session Isolation */}
+          <div className="rounded-2xl border border-border-subtle bg-surface p-6 shadow-sm space-y-3 hover:border-teal/30 transition-colors">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal/15 text-teal">
+              <Layers className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-base text-txt-primary">
+              Multi-User Workspace Isolation
+            </h3>
+            <p className="text-xs text-txt-muted leading-relaxed">
+              Every sign-in generates a unique, isolated workspace with dedicated SOP manuals, chat history, and telemetry. Easily switch between plant roles or create clean test sessions with 1 click.
+            </p>
+            <div className="pt-2 font-mono text-[11px] text-teal">
+              UUID Workspaces • Session Tokens
+            </div>
           </div>
-          <p className="text-xs sm:text-sm text-txt-primary leading-relaxed">
-            ForgeWise AI is an automated decision-support system. It is designed to accelerate knowledge retrieval and does not substitute for certified engineering authority, physical machine inspection, or regulatory compliance protocols. In cases involving high voltage, high-pressure hydraulics, hazardous materials, or confined space entry, operators must consult approved plant SOPs and physical Lockout/Tagout procedures.
-          </p>
-        </div>
-      </section>
 
-      {/* 5. Frequently Asked Questions */}
-      <section className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
-        <h2 className="text-2xl font-bold tracking-tight text-txt-primary text-center">
-          {t("landing.faqTitle")}
-        </h2>
-        <div className="space-y-4">
-          <div className="rounded-lg border border-border-subtle bg-surface p-4">
-            <h3 className="font-semibold text-sm text-txt-primary">
-              How does ForgeWise AI avoid hallucinating machine specifications?
+          {/* Card 2: Custom SOP Manual Ingestion */}
+          <div className="rounded-2xl border border-border-subtle bg-surface p-6 shadow-sm space-y-3 hover:border-teal/30 transition-colors">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/15 text-brand">
+              <Upload className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-base text-txt-primary">
+              Custom SOP Knowledge Base
             </h3>
-            <p className="mt-1 text-xs text-txt-muted leading-relaxed">
-              The system utilizes dual vector and full-text indexing with a strict relevance threshold. If retrieved document chunks do not meet the minimum similarity score, the engine issues an explicit refusal stating that verified data is unavailable in the library.
+            <p className="text-xs text-txt-muted leading-relaxed">
+              Upload custom OEM manuals, emergency isolation procedures, or wiring diagrams in PDF, DOCX, TXT, or Markdown. The pipeline extracts, chunks, and indexes with zero manual tagging.
             </p>
+            <div className="pt-2 font-mono text-[11px] text-brand">
+              Structure-Aware • 1536d Cosine Vectors
+            </div>
           </div>
-          <div className="rounded-lg border border-border-subtle bg-surface p-4">
-            <h3 className="font-semibold text-sm text-txt-primary">
-              Is customer documentation used to train foundation models?
-            </h3>
-            <p className="mt-1 text-xs text-txt-muted leading-relaxed">
-              No. All inference executes under enterprise zero-retention agreements or on customer-controlled private hardware via local Ollama instances. Customer SOPs and drawings are never used for model training.
-            </p>
-          </div>
-          <div className="rounded-lg border border-border-subtle bg-surface p-4">
-            <h3 className="font-semibold text-sm text-txt-primary">
-              Can technicians interact in Hindi on the shop floor?
-            </h3>
-            <p className="mt-1 text-xs text-txt-muted leading-relaxed">
-              Yes. The platform provides full interface and conversational translation in Hindi, including speech-to-text voice input, while preserving standardized Latin equipment identifiers and units.
-            </p>
-          </div>
-        </div>
-      </section>
 
-      {/* 6. Final Call to Action */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="rounded-2xl bg-brand px-6 py-12 sm:px-12 text-center text-white space-y-4 shadow-lg">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Ready to ground your plant operations in verified knowledge?
-          </h2>
-          <p className="max-w-xl mx-auto text-sm text-white/80 leading-relaxed">
-            Connect your equipment manuals, SOPs, and engineering drawings to an enterprise AI assistant built for reliability and safety.
-          </p>
-          <div className="pt-2">
-            <Link
-              href="/chat"
-              className="inline-flex items-center gap-2 rounded-md bg-teal px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity"
-            >
-              <span>Launch AI Assistant Console</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+          {/* Card 3: Multi-LLM & Multi-Language */}
+          <div className="rounded-2xl border border-border-subtle bg-surface p-6 shadow-sm space-y-3 hover:border-teal/30 transition-colors">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+              <Globe className="h-5 w-5" />
+            </div>
+            <h3 className="font-bold text-base text-txt-primary">
+              Multi-LLM & Multilingual Engine
+            </h3>
+            <p className="text-xs text-txt-muted leading-relaxed">
+              Seamlessly toggle between Gemini 2.5 Flash, GPT-4o, Claude 3.5, and air-gapped edge Ollama models. Instant bilingual translation into English, Hindi, Spanish, German, French, and Japanese.
+            </p>
+            <div className="pt-2 font-mono text-[11px] text-amber-500">
+              5 LLM Adapters • 6 Supported Languages
+            </div>
           </div>
         </div>
       </section>

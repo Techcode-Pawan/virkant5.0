@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 
 class LLMProvider(ABC):
     @abstractmethod
@@ -12,6 +12,20 @@ class LLMProvider(ABC):
     ) -> str:
         """Generate text completion from LLM."""
         pass
+
+    async def stream_response(
+        self,
+        prompt: str,
+        system_instruction: str,
+        temperature: float = 0.2,
+        max_tokens: int = 1500
+    ) -> AsyncGenerator[str, None]:
+        """Stream response tokens chunk by chunk."""
+        # Default fallback simulation if provider doesn't natively override
+        full_text = await self.generate_response(prompt, system_instruction, temperature, max_tokens)
+        words = full_text.split(" ")
+        for i, word in enumerate(words):
+            yield word + (" " if i < len(words) - 1 else "")
 
 class EmbeddingProvider(ABC):
     @abstractmethod

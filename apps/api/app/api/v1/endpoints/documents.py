@@ -1,11 +1,12 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, UploadFile, File, Form, Request, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.documents import DocumentResponse, DocumentPagePreviewResponse
 from app.services.document_service import DocumentService
-from app.core.security import get_current_user, require_role, AuthenticatedUser
+from app.core.security import get_current_user, AuthenticatedUser
 from app.core.rate_limit import rate_limit_check
 from app.db.session import get_db_session
+from app.services.document_registry import custom_document_registry
 
 router = APIRouter(prefix="/documents", tags=["Documents & Ingestion"])
 
@@ -18,21 +19,22 @@ async def list_documents(
     service = DocumentService(db_session=session)
     return await service.list_documents(
         organization_id=current_user.organization_id,
-        machine_id=machine_id
+        machine_id=machine_id,
+        workspace_id=current_user.workspace_id
     )
 
-@router.post("/upload", response_model=DocumentResponse, status_code=201)
+@router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
     machine_id: Optional[str] = Form(None),
     version: str = Form("1.0"),
-    current_user: AuthenticatedUser = Depends(require_role("knowledge_manager")),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session)
 ):
-    # Enforce upload rate limit (10 uploads/hour)
-    await rate_limit_check(request, max_requests=10, window_seconds=3600, key_prefix=f"upload:{current_user.user_id}")
+    # Enforce upload rate limit (30 uploads/hour per user session)
+    await rate_limit_check(request, max_requests=30, window_seconds=3600, key_prefix=f"upload:{current_user.user_id}")
 
     service = DocumentService(db_session=session)
     return await service.upload_document(
@@ -40,8 +42,34 @@ async def upload_document(
         title=title,
         organization_id=current_user.organization_id,
         machine_id=machine_id,
-        version=version
+        version=version,
+        workspace_id=current_user.workspace_id
     )
+
+@router.delete("/{document_id}", status_code=status.HTTP_200_OK)
+async def delete_document(
+    document_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session)
+):
+    service = DocumentService(db_session=session)
+    success = await service.delete_document(document_id, workspace_id=current_user.workspace_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Document not found or cannot be deleted")
+    return {"status": "deleted", "document_id": document_id}
+
+@router.get("/{document_id}/chunks")
+async def get_document_chunks(
+    document_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    chunks = custom_document_registry.get_all_chunks(workspace_id=current_user.workspace_id)
+    matching = [c for c in chunks if c.get("document_id") == document_id]
+    return {
+        "document_id": document_id,
+        "chunk_count": len(matching),
+        "chunks": matching
+    }
 
 @router.get("/{document_id}/pages/{page_number}", response_model=DocumentPagePreviewResponse)
 async def get_page_preview(

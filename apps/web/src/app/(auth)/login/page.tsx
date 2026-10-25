@@ -3,29 +3,38 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, ArrowRight, UserCheck, HardHat } from "lucide-react";
+import { Lock, Mail, ArrowRight, UserCheck, HardHat, Layers, Sparkles } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { useSession } from "@/lib/session";
 import { siteConfig } from "@/lib/config";
+import { UserRole } from "@/types";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const { signIn } = useSession();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionCreatedMsg, setSessionCreatedMsg] = useState<string | null>(null);
 
-  const handleLogin = (role: string = "operator", emailVal: string = "operator.rajesh@vikrant.internal") => {
+  const handleLogin = async (
+    role: UserRole = "operator",
+    emailVal: string = "operator.rajesh@vikrant.internal"
+  ) => {
     setLoading(true);
-    // Store mock JWT token for verified session
-    const mockToken = `mock-${role}:user-1:c1a2b3c4-d5e6-7f80-9a0b-1c2d3e4f5a6b`;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("forgewise_auth_token", mockToken);
-      localStorage.setItem("forgewise_user_role", role);
-      localStorage.setItem("forgewise_user_email", emailVal);
+    try {
+      const newSession = await signIn(emailVal, role, locale, true);
+      setSessionCreatedMsg(`Generated isolated workspace ${newSession.workspace_id}...`);
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 500);
+    } catch {
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 400);
     }
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 400);
   };
 
   return (
@@ -38,37 +47,54 @@ export default function LoginPage() {
           Sign In to {siteConfig.brandName}
         </h1>
         <p className="text-xs text-txt-muted">
-          Authorized plant technicians and engineering personnel only
+          Authorized plant technicians & engineering personnel • Multi-User Workspace Engine
         </p>
       </div>
 
       <div className="rounded-xl border border-border-subtle bg-surface p-6 sm:p-8 shadow-sm space-y-5">
         {/* Quick Demo Role Switcher for instant evaluator testing */}
         <div className="rounded-lg border border-teal/20 bg-teal/5 p-3.5 space-y-2">
-          <span className="block text-[11px] font-mono uppercase tracking-wider text-teal font-semibold">
-            Instant 1-Click Evaluation Logins
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="block text-[11px] font-mono uppercase tracking-wider text-teal font-semibold">
+              Instant 1-Click Evaluation Sign-In
+            </span>
+            <span className="flex items-center gap-1 text-[10px] font-mono text-teal">
+              <Layers className="h-3 w-3" />
+              <span>Auto-Workspace</span>
+            </span>
+          </div>
+
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => handleLogin("operator", "operator.rajesh@vikrant.internal")}
-              className="px-2 py-1.5 rounded bg-surface border border-border-subtle text-xs font-medium text-txt-primary hover:bg-elevated text-center"
+              disabled={loading}
+              className="px-2 py-1.5 rounded bg-surface border border-border-subtle text-xs font-medium text-txt-primary hover:bg-elevated text-center hover:border-teal/40 transition-all shadow-xs"
             >
               Operator
             </button>
             <button
               onClick={() => handleLogin("engineer", "engineer.elena@vikrant.internal")}
-              className="px-2 py-1.5 rounded bg-surface border border-border-subtle text-xs font-medium text-txt-primary hover:bg-elevated text-center"
+              disabled={loading}
+              className="px-2 py-1.5 rounded bg-surface border border-border-subtle text-xs font-medium text-txt-primary hover:bg-elevated text-center hover:border-teal/40 transition-all shadow-xs"
             >
               Engineer
             </button>
             <button
               onClick={() => handleLogin("org_admin", "admin.marcus@vikrant.internal")}
-              className="px-2 py-1.5 rounded bg-surface border border-border-subtle text-xs font-medium text-txt-primary hover:bg-elevated text-center"
+              disabled={loading}
+              className="px-2 py-1.5 rounded bg-surface border border-border-subtle text-xs font-medium text-txt-primary hover:bg-elevated text-center hover:border-teal/40 transition-all shadow-xs"
             >
               Org Admin
             </button>
           </div>
         </div>
+
+        {sessionCreatedMsg && (
+          <div className="rounded-lg border border-success/30 bg-success/10 p-2.5 text-xs font-mono text-success flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            <span>{sessionCreatedMsg}</span>
+          </div>
+        )}
 
         <form
           onSubmit={(e) => {
@@ -121,7 +147,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 rounded-md bg-brand py-2.5 text-sm font-semibold text-white shadow-xs hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {loading ? <span>Verifying credentials...</span> : <span>Sign In</span>}
+            {loading ? <span>Generating Workspace Session...</span> : <span>Sign In to Workspace</span>}
           </button>
         </form>
 
