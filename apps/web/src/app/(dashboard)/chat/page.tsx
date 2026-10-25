@@ -1,430 +1,331 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
-import {
-  Send,
-  Mic,
-  MicOff,
-  Volume2,
-  VolumeX,
-  RotateCcw,
-  Copy,
-  Check,
-  ThumbsUp,
-  ThumbsDown,
-  HardHat,
-  FileText,
-  AlertTriangle,
-  CheckCircle2,
-  Cpu,
-  Sparkles,
-} from "lucide-react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ImagePlus, Mic, MicOff, Plus, Send, Square, VolumeX, X } from "lucide-react";
 import CitationsDrawer from "@/components/chat/CitationsDrawer";
-import { useVoice } from "@/hooks/use-voice";
-import { useTranslation } from "@/lib/i18n";
+import MessageView from "@/components/chat/MessageView";
+import { cx, InlineAlert, Spinner } from "@/components/ui/primitives";
+import VoiceStatus from "@/components/voice/VoiceStatus";
+import { useConversation } from "@/hooks/use-conversation";
+import { loadVoiceSettings, useVoiceSession, VoiceSettings } from "@/hooks/use-voice-session";
 import { fetchApi } from "@/lib/api-client";
-import { ChatMessage, Citation, Machine } from "@/types";
+import { MODE_LABEL } from "@/lib/chat";
+import { useTranslation } from "@/lib/i18n";
+import type { ChatMode, Citation, Machine } from "@/types";
 
-export default function ChatConsolePage() {
-  const searchParams = useSearchParams();
-  const machineParam = searchParams.get("machine");
+const SUGGESTIONS = [
+  { text: "What is the seal gland bolt torque for pump PMP-402?", machine: "PMP-402" },
+  { text: "Spindle chiller alarm E-304: what are the diagnostic steps?", machine: "CNC-MILL-02" },
+  { text: "PRV-102 relief valve chatter on the hydraulic press: what should I check?", machine: "HYD-PRESS-01" },
+];
 
-  const { t, locale } = useTranslation();
-  const {
-    isRecording,
-    isSpeaking,
-    transcript,
-    isSupported: voiceSupported,
-    startRecording,
-    stopRecording,
-    speakText,
-    stopSpeaking,
-    repeatLastAnswer,
-  } = useVoice(locale);
+const MODE_KEY = "forgewise_chat_mode";
 
-  const [inputMessage, setInputMessage] = useState("");
-  const [selectedMachine, setSelectedMachine] = useState<string>(machineParam || "");
+function ChatConsole() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const { locale } = useTranslation();
+  const convo = useConversation();
+  const { messages, sending, send, stop, reset, load, lastQuestion } = convo;
+
+  const [input, setInput] = useState("");
+  const [mode, setMode] = useState<ChatMode>("grounded");
+  const [machineId, setMachineId] = useState(params?.get("machine") || "");
   const [machines, setMachines] = useState<Machine[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [feedbackSent, setFeedbackSent] = useState<Record<string, number>>({});
+  const [machinesError, setMachinesError] = useState<string | null>(null);
+  const [image, setImage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [citation, setCitation] = useState<Citation | null>(null);
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>();
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const modeRef = useRef(mode);
+  const machineRef = useRef(machineId);
+  modeRef.current = mode;
+  machineRef.current = machineId;
 
-  // Sync voice transcript to input
   useEffect(() => {
-    if (transcript) {
-      setInputMessage(transcript);
+    setVoiceSettings(loadVoiceSettings());
+    try {
+      const saved = localStorage.getItem(MODE_KEY);
+      if (saved === "general" || saved === "grounded") setMode(saved);
+    } catch {
+      /* ignore */
     }
-  }, [transcript]);
-
-  // Load machine list
-  useEffect(() => {
-    async function loadMachines() {
-      try {
-        const data = await fetchApi<Machine[]>("/api/v1/machines");
-        setMachines(data);
-      } catch (err) {
-        console.error("Machine load error:", err);
-      }
-    }
-    loadMachines();
   }, []);
 
-  // Initial greeting
+  // Open a conversation from History (?c=<id>).
+  const requested = params?.get("c");
   useEffect(() => {
-    if (messages.length === 0) {
-      setMessages([
-        {
-          id: "welcome-1",
-          conversation_id: "welcome",
-          sender: "assistant",
-          content:
-            locale === "hi"
-              ? "नमस्ते! मैं ForgeWise AI हूँ, आपका औद्योगिक ज्ञान सहायक। आप SOP, उपकरण टॉर्क, हाइड्रोलिक दबाव, या त्रुटि कोड के बारे में पूछ सकते हैं।"
-              : "Welcome to ForgeWise AI. I am your grounded industrial knowledge copilot. Ask me about pump seal torque, CNC chiller error codes (E-304), or hydraulic valve troubleshooting.",
-          groundedness_status: "supported",
-          created_at: new Date().toISOString(),
-        },
-      ]);
-    }
-  }, [locale, messages.length]);
+    if (requested && requested !== convo.conversationId) load(requested);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requested]);
 
-  // Scroll to bottom on new message
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const handleSendMessage = async (queryText?: string) => {
-    const textToSend = queryText || inputMessage;
-    if (!textToSend.trim() || loading) return;
-
-    const userMsg: ChatMessage = {
-      id: `usr-${Date.now()}`,
-      conversation_id: "active",
-      sender: "user",
-      content: textToSend.trim(),
-      created_at: new Date().toISOString(),
+    let alive = true;
+    fetchApi<Machine[]>("/api/v1/machines")
+      .then((data) => alive && setMachines(data))
+      .catch((err) => alive && setMachinesError(err.message));
+    return () => {
+      alive = false;
     };
+  }, []);
 
-    setMessages((prev) => [...prev, userMsg]);
-    setInputMessage("");
-    setLoading(true);
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages.length, sending]);
 
-    try {
-      const response = await fetchApi<any>("/api/v1/chat", {
-        method: "POST",
-        body: JSON.stringify({
-          message: textToSend.trim(),
-          language: locale,
-          machine_id: selectedMachine || undefined,
-        }),
+  const voice = useVoiceSession({
+    lang: locale,
+    settings: voiceSettings,
+    onUtterance: async (text, { signal }) => {
+      const { response, error } = await send(text, { mode: modeRef.current, language: locale, machineId: machineRef.current, voice: true, signal });
+      if (error) throw error;
+      return response?.answer ?? null;
+    },
+  });
+
+  const submit = useCallback(
+    async (text?: string, retry = false) => {
+      const message = (text ?? input).trim();
+      if ((!message && !image) || sending) return;
+      setInput("");
+      const attached = image;
+      setImage(null);
+      await send(message || "Describe the attached equipment photo and any visible fault.", {
+        mode,
+        language: locale,
+        machineId: machineRef.current, // ref: suggestions set the machine in the same tick
+        imageData: attached,
+        retry,
       });
+      inputRef.current?.focus();
+    },
+    [input, image, sending, send, mode, locale],
+  );
 
-      const assistantMsg: ChatMessage = {
-        id: `ast-${Date.now()}`,
-        conversation_id: response.conversation_id,
-        sender: "assistant",
-        content: response.answer,
-        groundedness_status: response.confidence_status,
-        citations: response.citations,
-        created_at: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
-
-      // If speech was used, read answer
-      if (isRecording) {
-        speakText(response.answer);
-      }
-    } catch (err: any) {
-      const errorMsg: ChatMessage = {
-        id: `err-${Date.now()}`,
-        conversation_id: "error",
-        sender: "assistant",
-        content:
-          err.message ||
-          "Unable to retrieve verified documentation from knowledge engine.",
-        groundedness_status: "insufficient_evidence",
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setLoading(false);
+  const changeMode = (next: ChatMode) => {
+    setMode(next);
+    try {
+      localStorage.setItem(MODE_KEY, next);
+    } catch {
+      /* ignore */
     }
   };
 
-  const copyToClipboard = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const newChat = () => {
+    voice.stop();
+    reset();
+    router.replace("/chat");
+    inputRef.current?.focus();
   };
 
-  const handleFeedback = async (messageId: string, rating: number) => {
-    setFeedbackSent((prev) => ({ ...prev, [messageId]: rating }));
-    try {
-      await fetchApi("/api/v1/feedback", {
-        method: "POST",
-        body: JSON.stringify({ message_id: messageId, rating }),
-      });
-    } catch (err) {
-      console.error("Feedback submit error:", err);
-    }
+  const onImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    setImageError(null);
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return setImageError("Choose a PNG, JPEG or WebP image.");
+    if (file.size > 8 * 1024 * 1024) return setImageError("Images must be 8 MB or smaller.");
+    const reader = new FileReader();
+    reader.onload = () => setImage(reader.result as string);
+    reader.readAsDataURL(file);
   };
+
+  const voiceActive = voice.sessionActive;
+  const lastFailed = messages.length > 0 && messages[messages.length - 1].failed;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] min-h-[500px] rounded-xl border border-border-subtle bg-surface shadow-xs overflow-hidden">
-      {/* Chat Header & Equipment Filter */}
-      <div className="border-b border-border-subtle bg-elevated/40 p-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center space-x-2.5">
-          <div className="h-8 w-8 rounded-lg bg-brand text-white flex items-center justify-center font-mono font-bold text-xs">
-            FW
-          </div>
-          <div>
-            <h2 className="font-semibold text-sm text-txt-primary flex items-center gap-1.5">
-              <span>{t("nav.chat")}</span>
-              <span className="flex items-center gap-1 text-[10px] font-mono text-success rounded bg-success/15 px-1.5 py-0.2">
-                <CheckCircle2 className="h-2.5 w-2.5" /> Grounded
-              </span>
-            </h2>
-            <p className="text-[11px] text-txt-muted font-mono">
-              Hybrid pgvector + PostgreSQL FTS
-            </p>
-          </div>
+    <div className="-my-6 flex h-[calc(100dvh-3.5rem)] flex-col lg:-my-8">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle py-3">
+        <div role="radiogroup" aria-label="Answer mode" className="flex rounded-md border border-border-subtle bg-base/50 p-0.5">
+          {(["grounded", "general"] as ChatMode[]).map((m) => (
+            <button
+              key={m}
+              role="radio"
+              aria-checked={mode === m}
+              onClick={() => changeMode(m)}
+              className={cx("rounded px-2.5 py-1 text-sm", mode === m ? "bg-elevated text-txt-primary" : "text-txt-muted hover:text-txt-primary")}
+            >
+              {MODE_LABEL[m]}
+            </button>
+          ))}
         </div>
-
-        {/* Machine Asset Filter Selector */}
-        <div className="flex items-center gap-2">
-          <Cpu className="h-4 w-4 text-txt-muted hidden sm:inline" />
-          <select
-            value={selectedMachine}
-            onChange={(e) => setSelectedMachine(e.target.value)}
-            className="rounded-md border border-border-subtle bg-surface px-3 py-1.5 text-xs text-txt-primary focus:outline-none focus:border-teal font-mono"
-          >
-            <option value="">{t("chat.allMachines")}</option>
-            {machines.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.id} • {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <select
+          aria-label="Equipment filter"
+          value={machineId}
+          onChange={(e) => setMachineId(e.target.value)}
+          className="field h-8 w-auto max-w-[220px] py-0 text-sm"
+          title={machinesError || undefined}
+        >
+          <option value="">All equipment</option>
+          {machines.map((m) => (
+            <option key={m.id} value={m.id}>{m.id}: {m.name}</option>
+          ))}
+        </select>
+        <button onClick={newChat} className="btn-ghost ml-auto h-8">
+          <Plus className="h-4 w-4" /> New chat
+        </button>
       </div>
 
-      {/* Message Stream */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-        {messages.map((msg) => {
-          const isUser = msg.sender === "user";
-          return (
-            <div
-              key={msg.id}
-              className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
-            >
-              <div
-                className={`max-w-2xl rounded-xl p-4 sm:p-5 text-sm leading-relaxed shadow-xs ${
-                  isUser
-                    ? "bg-brand text-white rounded-br-none"
-                    : "bg-elevated/50 border border-border-subtle text-txt-primary rounded-bl-none"
-                }`}
-              >
-                {/* Assistant Grounding & Safety Callout */}
-                {!isUser && (
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle/60 pb-2">
-                    <div className="flex items-center gap-1.5 text-xs font-mono">
-                      {msg.groundedness_status === "supported" ? (
-                        <span className="flex items-center gap-1 text-success">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>100% Document Grounded</span>
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-warning">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          <span>No Grounded Data Available</span>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={() => copyToClipboard(msg.id, msg.content)}
-                        className="p-1 rounded text-txt-muted hover:text-txt-primary"
-                        title={t("chat.copyAnswer")}
-                      >
-                        {copiedId === msg.id ? (
-                          <Check className="h-3.5 w-3.5 text-success" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => speakText(msg.content)}
-                        className="p-1 rounded text-txt-muted hover:text-txt-primary"
-                        title={t("chat.repeatSpeech")}
-                      >
-                        <Volume2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
+      {/* Messages */}
+      <div ref={listRef} className="flex-1 overflow-y-auto py-6" aria-live="polite">
+        {convo.loadingHistory && (
+          <div className="flex items-center gap-2 text-sm text-txt-muted"><Spinner /> Loading conversation</div>
+        )}
+        {convo.loadError && <InlineAlert tone="danger" title="Conversation unavailable">{convo.loadError}</InlineAlert>}
 
-                {/* Message Body */}
-                <div className="whitespace-pre-wrap font-sans text-sm">
-                  {msg.content}
-                </div>
-
-                {/* Citation Chips */}
-                {!isUser && msg.citations && msg.citations.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-border-subtle/60 space-y-2">
-                    <span className="font-mono text-[11px] uppercase tracking-wider text-txt-muted block">
-                      {t("chat.citationsHeader")}:
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {msg.citations.map((c, idx) => (
-                        <button
-                          key={c.citation_id || idx}
-                          onClick={() => setActiveCitation(c)}
-                          className="flex items-center gap-1.5 rounded-md border border-border-subtle bg-surface px-2.5 py-1 text-xs font-mono text-teal hover:border-teal hover:bg-surface/80 transition-colors"
-                        >
-                          <FileText className="h-3.5 w-3.5" />
-                          <span>
-                            {c.document_title?.split(" ")[0]} p.{c.page_number}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Operator Feedback Buttons */}
-                {!isUser && msg.id !== "welcome-1" && (
-                  <div className="mt-3 flex items-center justify-between text-xs text-txt-muted pt-2">
-                    <span>{t("chat.feedbackPrompt")}</span>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleFeedback(msg.id, 1)}
-                        className={`p-1 rounded ${
-                          feedbackSent[msg.id] === 1 ? "text-success font-bold" : "hover:text-txt-primary"
-                        }`}
-                        title="Helpful"
-                      >
-                        <ThumbsUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleFeedback(msg.id, -1)}
-                        className={`p-1 rounded ${
-                          feedbackSent[msg.id] === -1 ? "text-danger font-bold" : "hover:text-txt-primary"
-                        }`}
-                        title="Unhelpful"
-                      >
-                        <ThumbsDown className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+        {!convo.loadingHistory && messages.length === 0 && (
+          <div className="mx-auto max-w-xl pt-6 sm:pt-12">
+            <h1 className="text-xl font-semibold tracking-[-0.01em]">What do you need to check?</h1>
+            <p className="mt-1.5 text-sm text-txt-muted">
+              {mode === "grounded"
+                ? "Answers come only from the SOPs and manuals in this workspace, with the page they came from."
+                : "General assistant mode. Your documents are still searched and cited when they match."}
+            </p>
+            <div className="mt-6 divide-y divide-border-subtle rounded-lg border border-border-subtle">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s.text}
+                  onClick={() => {
+                    setMachineId(s.machine);
+                    machineRef.current = s.machine;
+                    submit(s.text);
+                  }}
+                  className="block w-full px-4 py-3 text-left text-sm text-txt-muted transition-colors hover:bg-elevated/50 hover:text-txt-primary"
+                >
+                  {s.text}
+                </button>
+              ))}
             </div>
-          );
-        })}
-
-        {loading && (
-          <div className="flex items-center space-x-2 text-txt-muted font-mono text-xs p-3">
-            <span className="h-2 w-2 rounded-full bg-teal animate-ping" />
-            <span>Retrieving SOP chunks and verifying citations...</span>
+            <p className="mt-3 text-xs text-txt-faint">Examples refer to the seeded plant equipment. Upload the matching manuals in the SOP library to get answers.</p>
           </div>
         )}
-        <div ref={messagesEndRef} />
+
+        <div className="mx-auto max-w-3xl space-y-6">
+          {messages.map((m) => (
+            <MessageView
+              key={m.id}
+              message={m}
+              onCitation={setCitation}
+              onSpeak={voice.ttsSupported ? voice.speakOnly : undefined}
+              onRetry={m.failed && m.id === messages[messages.length - 1].id && m.errorCode !== "ABORTED" ? () => {
+                const q = lastQuestion();
+                if (q) submit(q, true);
+              } : undefined}
+            />
+          ))}
+          {sending && (
+            <div className="flex items-center gap-2 text-sm text-txt-muted">
+              <Spinner /> {mode === "grounded" ? "Searching your documents and drafting an answer" : "Drafting an answer"}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Suggested Quick Prompts Bar */}
-      <div className="border-t border-border-subtle bg-elevated/20 px-4 py-2 flex items-center gap-2 overflow-x-auto text-xs">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-txt-muted whitespace-nowrap">
-          Quick Diagnostics:
-        </span>
-        <button
-          onClick={() => handleSendMessage("What is the seal gland torque for pump PMP-402?")}
-          className="rounded border border-border-subtle bg-surface px-2.5 py-1 text-xs text-txt-primary hover:border-teal whitespace-nowrap"
-        >
-          PMP-402 Torque Specs
-        </button>
-        <button
-          onClick={() => handleSendMessage("Spindle chiller E-304 high temperature steps")}
-          className="rounded border border-border-subtle bg-surface px-2.5 py-1 text-xs text-txt-primary hover:border-teal whitespace-nowrap"
-        >
-          CNC Spindle Alarm E-304
-        </button>
-        <button
-          onClick={() => handleSendMessage("2000-ton hydraulic press PRV-102 relief valve chatter")}
-          className="rounded border border-border-subtle bg-surface px-2.5 py-1 text-xs text-txt-primary hover:border-teal whitespace-nowrap"
-        >
-          PRV-102 Valve Chatter
-        </button>
-      </div>
-
-      {/* Input Composer & Voice Controls */}
-      <div className="border-t border-border-subtle p-3 sm:p-4 bg-surface">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSendMessage();
-          }}
-          className="flex items-center gap-2"
-        >
-          {/* Microphone Voice Button */}
-          {voiceSupported && (
-            <button
-              type="button"
-              onClick={isRecording ? stopRecording : startRecording}
-              className={`p-2.5 rounded-lg border transition-colors ${
-                isRecording
-                  ? "bg-danger text-white border-danger animate-pulse"
-                  : "bg-elevated border-border-subtle text-txt-muted hover:text-txt-primary"
-              }`}
-              title={isRecording ? "Stop recording voice" : "Speak question"}
-            >
-              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            </button>
+      {/* Composer */}
+      <div className="border-t border-border-subtle pb-4 pt-3">
+        <div className="mx-auto max-w-3xl">
+          {(voiceActive || voice.state === "error" || voice.error || voice.notice) && (
+            <div className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-border-subtle bg-surface px-3 py-2">
+              <VoiceStatus state={voice.state} />
+              {voice.interim && voice.state === "listening" && <span className="min-w-0 flex-1 truncate text-sm text-txt-muted">{voice.interim}</span>}
+              <span className="ml-auto flex items-center gap-1">
+                {voice.state === "speaking" && (
+                  <button onClick={voice.interrupt} className="btn-ghost h-7 px-2 text-xs"><VolumeX className="h-3.5 w-3.5" /> Stop speaking</button>
+                )}
+                {voiceActive && <button onClick={() => voice.stop()} className="btn-ghost h-7 px-2 text-xs"><MicOff className="h-3.5 w-3.5" /> End voice</button>}
+              </span>
+              {(voice.error || voice.notice) && <p className="w-full text-xs text-txt-muted">{voice.error || voice.notice}</p>}
+            </div>
           )}
-
-          {/* Voice Stop/Repeat Controls */}
-          {isSpeaking && (
-            <button
-              type="button"
-              onClick={stopSpeaking}
-              className="p-2.5 rounded-lg border border-border-subtle bg-elevated text-warning"
-              title={t("chat.stopSpeaking")}
-            >
-              <VolumeX className="h-4 w-4" />
-            </button>
+          {image && (
+            <div className="mb-2 flex items-center gap-3">
+              <div className="relative h-14 w-14 overflow-hidden rounded-md border border-border-subtle">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={image} alt="Attached photo" className="h-full w-full object-cover" />
+                <button onClick={() => setImage(null)} aria-label="Remove image" className="absolute right-0.5 top-0.5 rounded bg-black/70 p-0.5 text-white">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <p className="text-xs text-txt-muted">Photo attached. It is described only if a vision provider is configured on the server.</p>
+            </div>
           )}
+          {imageError && <p className="mb-2 text-xs text-danger">{imageError}</p>}
 
-          <input
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            placeholder={
-              isRecording ? t("chat.recording") : t("chat.placeholder")
-            }
-            className="flex-1 rounded-lg border border-border-subtle bg-elevated/40 px-4 py-2.5 text-sm text-txt-primary focus:outline-none focus:border-teal"
-          />
-
-          <button
-            type="submit"
-            disabled={!inputMessage.trim() || loading}
-            className="rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:opacity-90 disabled:opacity-40 transition-opacity flex items-center gap-1.5"
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+            className="flex items-end gap-2 rounded-xl border border-border-strong bg-surface p-2 focus-within:border-accent/60"
           >
-            <span>{t("chat.send")}</span>
-            <Send className="h-4 w-4" />
-          </button>
-        </form>
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onImage} />
+            <button type="button" className="icon-btn" aria-label="Attach photo" onClick={() => fileRef.current?.click()}>
+              <ImagePlus className="h-[18px] w-[18px]" />
+            </button>
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder={voiceActive ? "Speak, or type here" : "Ask about an SOP, fault code or procedure"}
+              aria-label="Message"
+              className="max-h-[180px] min-h-[36px] flex-1 resize-none bg-transparent px-1 py-2 text-sm text-txt-primary placeholder:text-txt-faint focus:outline-none"
+            />
+            {voice.recognitionSupported && (
+              <button
+                type="button"
+                onClick={() => (voiceActive ? voice.stop() : voice.start())}
+                aria-pressed={voiceActive}
+                aria-label={voiceActive ? "End voice conversation" : "Start voice conversation"}
+                title={voiceActive ? "End voice conversation" : "Talk hands-free: it keeps listening until you end it"}
+                className={cx("icon-btn", voiceActive && "bg-success/15 text-success hover:bg-success/20 hover:text-success")}
+              >
+                {voiceActive ? <MicOff className="h-[18px] w-[18px]" /> : <Mic className="h-[18px] w-[18px]" />}
+              </button>
+            )}
+            {sending ? (
+              <button type="button" onClick={stop} className="btn-secondary h-9 px-3" aria-label="Stop generating">
+                <Square className="h-3.5 w-3.5" /> Stop
+              </button>
+            ) : (
+              <button type="submit" disabled={!input.trim() && !image} className="btn-primary h-9 px-3" aria-label="Send">
+                <Send className="h-4 w-4" />
+              </button>
+            )}
+          </form>
+          <p className="mt-1.5 text-2xs text-txt-faint">
+            {lastFailed ? "The last request failed; nothing was answered. " : ""}
+            {voice.recognitionSupported ? "" : "Voice input isn't available in this browser; typing works everywhere. "}
+            Verify critical values against the source before acting.
+          </p>
+        </div>
       </div>
 
-      {/* Citations Slide-Over Drawer */}
-      <CitationsDrawer
-        citation={activeCitation}
-        onClose={() => setActiveCitation(null)}
-      />
+      <CitationsDrawer citation={citation} onClose={() => setCitation(null)} />
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center gap-2 text-sm text-txt-muted"><Spinner /> Loading chat</div>}>
+      <ChatConsole />
+    </Suspense>
   );
 }

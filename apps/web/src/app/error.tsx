@@ -1,39 +1,22 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
-export default function ErrorPage({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    console.error("Runtime client boundary error:", error);
+    console.error("Client error boundary:", error);
   }, [error]);
 
   return (
-    <div className="mx-auto max-w-md px-4 py-24 text-center space-y-4">
-      <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-danger/10 text-danger">
-        <AlertTriangle className="h-6 w-6" />
-      </div>
-      <h1 className="text-2xl font-bold tracking-tight text-txt-primary">
-        Operational Exception Detected
-      </h1>
-      <p className="text-xs text-txt-muted leading-relaxed">
-        A client-side interface fault occurred. An event diagnostic has been logged.
+    <div className="mx-auto max-w-md px-4 py-24">
+      <h1 className="text-xl font-semibold">This page failed to load</h1>
+      <p className="mt-2 text-sm text-txt-muted">
+        An unexpected error occurred while rendering. Your saved data is not affected. Try again, and if it keeps happening, reload the app.
       </p>
-      <div className="pt-2">
-        <button
-          onClick={() => reset()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-brand px-4 py-2 text-xs font-semibold text-white shadow-xs hover:opacity-90"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          <span>Reload Interface State</span>
-        </button>
-      </div>
+      <button onClick={() => reset()} className="btn-primary mt-6">
+        <RotateCcw className="h-4 w-4" /> Try again
+      </button>
     </div>
   );
 }

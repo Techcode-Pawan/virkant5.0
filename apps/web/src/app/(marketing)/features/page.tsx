@@ -9,14 +9,10 @@ import {
   Mic,
   Cpu,
   ShieldAlert,
-  Search,
-  CheckCircle2,
   ArrowRight,
 } from "lucide-react";
-import { useTranslation } from "@/lib/i18n";
 
 export default function FeaturesPage() {
-  const { t } = useTranslation();
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 space-y-12">

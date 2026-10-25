@@ -1,228 +1,178 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Cpu, Plus, MessageSquare, FileText, CheckCircle2, X } from "lucide-react";
-import { useTranslation } from "@/lib/i18n";
-import { fetchApi } from "@/lib/api-client";
-import { Machine } from "@/types";
+import { Cpu, FileText, Plus, X } from "lucide-react";
+import { openSourceDocument } from "@/components/chat/CitationsDrawer";
+import { EmptyState, InlineAlert, PageHeader, Skeleton, Spinner } from "@/components/ui/primitives";
+import { ROLE_LEVEL } from "@/components/layout/nav";
+import { errorMessage, fetchApi } from "@/lib/api-client";
+import { useSession } from "@/lib/session";
+import type { DocumentItem, Machine } from "@/types";
 
-export default function MachineRegistryPage() {
-  const { t } = useTranslation();
-  const [machines, setMachines] = useState<Machine[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [newId, setNewId] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newOem, setNewOem] = useState("");
-  const [newModel, setNewModel] = useState("");
-  const [newLocation, setNewLocation] = useState("");
+export default function MachinesPage() {
+  const { session } = useSession();
+  const [machines, setMachines] = useState<Machine[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Machine | null>(null);
+  const [docs, setDocs] = useState<DocumentItem[] | null>(null);
+  const [docsError, setDocsError] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState({ id: "", name: "", manufacturer: "", model: "", plant_location: "" });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const canRegister = (ROLE_LEVEL[session?.role || "viewer"] || 1) >= ROLE_LEVEL.engineer;
 
-  useEffect(() => {
-    async function loadMachines() {
-      try {
-        const data = await fetchApi<Machine[]>("/api/v1/machines");
-        setMachines(data);
-      } catch (err) {
-        console.error("Machine load error:", err);
-      }
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      setMachines(await fetchApi<Machine[]>("/api/v1/machines"));
+    } catch (err) {
+      setError(errorMessage(err));
     }
-    loadMachines();
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  useEffect(() => {
+    load();
+  }, [load, session?.workspace_id]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setDocs(null);
+    setDocsError(null);
+    fetchApi<DocumentItem[]>(`/api/v1/documents?machine_id=${encodeURIComponent(selected.id)}`)
+      .then((d) => setDocs(d.filter((x) => x.machine_id === selected.id)))
+      .catch((err) => setDocsError(errorMessage(err)));
+  }, [selected]);
+
+  const register = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newId || !newName) return;
+    setSaving(true);
+    setFormError(null);
     try {
       const created = await fetchApi<Machine>("/api/v1/machines", {
         method: "POST",
-        body: JSON.stringify({
-          id: newId.trim().toUpperCase(),
-          name: newName.trim(),
-          manufacturer: newOem.trim(),
-          model: newModel.trim(),
-          plant_location: newLocation.trim(),
-        }),
+        body: JSON.stringify({ ...form, id: form.id.trim().toUpperCase() }),
       });
-      setMachines((prev) => [...prev, created]);
-      setModalOpen(false);
-      setNewId("");
-      setNewName("");
-      setNewOem("");
-      setNewModel("");
-      setNewLocation("");
-    } catch (err: any) {
-      alert(`Registration error: ${err.message || "Failed to register equipment"}`);
+      setMachines((prev) => [...(prev || []), created].sort((a, b) => a.id.localeCompare(b.id)));
+      setForm({ id: "", name: "", manufacturer: "", model: "", plant_location: "" });
+      setFormOpen(false);
+    } catch (err) {
+      setFormError(errorMessage(err));
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-subtle pb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-txt-primary">
-            {t("machines.title")}
-          </h1>
-          <p className="text-xs text-txt-muted mt-1">
-            Registered industrial machines, production lines, and associated SOP manuals.
-          </p>
+    <div>
+      <PageHeader
+        title="Equipment"
+        description="Registered plant equipment. Link manuals to a machine when uploading so answers can be scoped to it."
+        actions={canRegister && <button onClick={() => setFormOpen(true)} className="btn-primary"><Plus className="h-4 w-4" /> Register equipment</button>}
+      />
+      {error && <InlineAlert tone="danger" className="mb-4" action={<button onClick={load} className="btn-ghost h-7 px-2 text-xs">Retry</button>}>{error}</InlineAlert>}
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="panel divide-y divide-border-subtle self-start">
+          {machines === null && !error && <div className="space-y-3 p-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>}
+          {machines?.length === 0 && <EmptyState icon={Cpu} title="No equipment registered" description="Engineers can register machines here." />}
+          {machines?.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setSelected(m)}
+              aria-pressed={selected?.id === m.id}
+              className={`flex w-full items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-elevated/40 ${selected?.id === m.id ? "bg-elevated/60" : ""}`}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-txt-primary">
+                  <span className="code-id mr-2 text-txt-muted">{m.id}</span>
+                  {m.name}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-txt-faint">
+                  {[m.manufacturer, m.model, m.plant_location].filter(Boolean).join(", ") || "No details recorded"}
+                </p>
+              </div>
+              <span className="shrink-0 text-xs tabular-nums text-txt-muted">{m.document_count ?? 0} docs</span>
+            </button>
+          ))}
         </div>
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-xs font-semibold text-white shadow-xs hover:opacity-90"
-        >
-          <Plus className="h-4 w-4" />
-          <span>{t("machines.addMachine")}</span>
-        </button>
+        <aside className="panel self-start p-5">
+          {!selected ? (
+            <p className="text-sm text-txt-muted">Select a machine to see its documents and ask about it.</p>
+          ) : (
+            <div>
+              <p className="code-id text-txt-muted">{selected.id}</p>
+              <h2 className="mt-0.5 text-[0.9375rem] font-semibold">{selected.name}</h2>
+              <dl className="mt-4 grid grid-cols-[110px_1fr] gap-y-1.5 text-sm">
+                <dt className="text-txt-muted">Manufacturer</dt><dd>{selected.manufacturer || "Not set"}</dd>
+                <dt className="text-txt-muted">Model</dt><dd>{selected.model || "Not set"}</dd>
+                <dt className="text-txt-muted">Location</dt><dd>{selected.plant_location || "Not set"}</dd>
+              </dl>
+              <p className="mt-5 text-sm font-medium">Linked documents</p>
+              {docsError && <p className="mt-2 text-sm text-danger">{docsError}</p>}
+              {docs === null && !docsError && <Skeleton className="mt-2 h-10" />}
+              {docs?.length === 0 && (
+                <p className="mt-2 text-sm text-txt-muted">
+                  None yet. <Link href="/documents" className="text-accent hover:underline">Upload a manual</Link> and link it to {selected.id}.
+                </p>
+              )}
+              <ul className="mt-2 space-y-1">
+                {docs?.map((d) => (
+                  <li key={d.id}>
+                    <button onClick={() => openSourceDocument(d.id).catch(() => {})} className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-sm hover:bg-elevated">
+                      <FileText className="h-4 w-4 shrink-0 text-accent" />
+                      <span className="truncate">{d.title}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-5 flex flex-wrap gap-2 border-t border-border-subtle pt-4">
+                <Link href={`/chat?machine=${encodeURIComponent(selected.id)}`} className="btn-primary h-8 px-3">Ask about {selected.id}</Link>
+                <Link href="/voice" className="btn-ghost h-8 px-3">Use voice</Link>
+              </div>
+            </div>
+          )}
+        </aside>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {machines.map((m) => (
-          <div
-            key={m.id}
-            className="rounded-xl border border-border-subtle bg-surface p-6 space-y-4 shadow-xs"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="font-mono text-xs text-teal font-semibold">
-                  {m.id}
-                </span>
-                <h3 className="font-semibold text-base text-txt-primary mt-1">
-                  {m.name}
-                </h3>
-              </div>
-              <span className="rounded bg-success/15 px-2 py-0.5 font-mono text-[10px] text-success">
-                Active
-              </span>
+      {formOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div aria-hidden className="absolute inset-0 bg-black/55" onClick={() => setFormOpen(false)} />
+          <form onSubmit={register} role="dialog" aria-modal="true" aria-labelledby="reg-title" className="panel relative w-full max-w-md p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 id="reg-title" className="text-[0.9375rem] font-semibold">Register equipment</h2>
+              <button type="button" onClick={() => setFormOpen(false)} className="icon-btn -mr-2" aria-label="Close"><X className="h-4 w-4" /></button>
             </div>
-
-            <div className="space-y-1.5 text-xs text-txt-muted font-mono border-y border-border-subtle py-3">
-              <div>Manufacturer: <span className="text-txt-primary">{m.manufacturer || "N/A"}</span></div>
-              <div>Model: <span className="text-txt-primary">{m.model || "N/A"}</span></div>
-              <div>Location: <span className="text-txt-primary">{m.plant_location || "N/A"}</span></div>
+            <div className="space-y-3">
+              {([
+                ["id", "Equipment ID", "CNC-MILL-03", true],
+                ["name", "Name", "5-axis machining centre", true],
+                ["manufacturer", "Manufacturer", "", false],
+                ["model", "Model", "", false],
+                ["plant_location", "Location", "", false],
+              ] as const).map(([key, label, placeholder, required]) => (
+                <div key={key}>
+                  <label className="label" htmlFor={`m-${key}`}>{label}{required ? "" : " (optional)"}</label>
+                  <input
+                    id={`m-${key}`}
+                    required={required}
+                    minLength={required ? 2 : undefined}
+                    value={form[key]}
+                    placeholder={placeholder}
+                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                    className={`field ${key === "id" ? "font-mono uppercase" : ""}`}
+                  />
+                </div>
+              ))}
             </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <Link
-                href={`/chat?machine=${m.id}`}
-                className="flex items-center gap-1.5 text-xs font-semibold text-teal hover:underline"
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                <span>Launch Diagnostics</span>
-              </Link>
-              <Link
-                href={`/documents?machine=${m.id}`}
-                className="flex items-center gap-1 text-xs text-txt-muted hover:text-txt-primary"
-              >
-                <FileText className="h-3.5 w-3.5" />
-                <span>{m.document_count ?? 1} SOPs</span>
-              </Link>
+            {formError && <InlineAlert tone="danger" className="mt-4">{formError}</InlineAlert>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setFormOpen(false)} className="btn-ghost">Cancel</button>
+              <button type="submit" disabled={saving} className="btn-primary">{saving && <Spinner />} Register</button>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Add Machine Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-xl border border-border-subtle bg-surface p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
-              <h3 className="font-semibold text-sm text-txt-primary">
-                Register Plant Equipment
-              </h3>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="text-txt-muted hover:text-txt-primary"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-mono uppercase text-txt-muted mb-1">
-                  Machine Identifier Tag (e.g. TURB-GEN-01)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newId}
-                  onChange={(e) => setNewId(e.target.value)}
-                  placeholder="PMP-403"
-                  className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3 py-2 text-txt-primary focus:outline-none focus:border-teal font-mono uppercase"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono uppercase text-txt-muted mb-1">
-                  Equipment Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Secondary Boiler Feed Pump"
-                  className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3 py-2 text-txt-primary focus:outline-none focus:border-teal"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono uppercase text-txt-muted mb-1">
-                  Manufacturer (OEM)
-                </label>
-                <input
-                  type="text"
-                  value={newOem}
-                  onChange={(e) => setNewOem(e.target.value)}
-                  placeholder="Flowserve"
-                  className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3 py-2 text-txt-primary focus:outline-none focus:border-teal"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono uppercase text-txt-muted mb-1">
-                  Model
-                </label>
-                <input
-                  type="text"
-                  value={newModel}
-                  onChange={(e) => setNewModel(e.target.value)}
-                  placeholder="HPX-200"
-                  className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3 py-2 text-txt-primary focus:outline-none focus:border-teal"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono uppercase text-txt-muted mb-1">
-                  Plant Location
-                </label>
-                <input
-                  type="text"
-                  value={newLocation}
-                  onChange={(e) => setNewLocation(e.target.value)}
-                  placeholder="Boiler House 2, Bay D"
-                  className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3 py-2 text-txt-primary focus:outline-none focus:border-teal"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-3 py-1.5 rounded-md border border-border-subtle bg-surface text-txt-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-md bg-brand text-white font-semibold shadow-xs"
-                >
-                  Register Asset
-                </button>
-              </div>
-            </form>
-          </div>
+          </form>
         </div>
       )}
     </div>

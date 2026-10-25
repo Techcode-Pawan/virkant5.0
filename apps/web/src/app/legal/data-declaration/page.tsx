@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, Database, ShieldCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export default function DataDeclarationPage() {
   const lifecycleData = [

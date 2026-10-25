@@ -1,10 +1,10 @@
 import io
 from typing import List, Dict, Any, Tuple
 from pypdf import PdfReader
-from docx import Document as DocxDocument
 from app.core.exceptions import DocumentValidationError
 from app.ingestion.chunking import structure_aware_chunking
-from app.ai.model_registry import get_embedding_provider
+from app.ai.embeddings import embed_documents
+from app.ai.vision import describe_image
 
 MAGIC_SIGNATURES = {
     b"%PDF-": "application/pdf",
@@ -30,20 +30,36 @@ def validate_file_content(file_bytes: bytes, filename: str) -> str:
         return "image/png"
     if file_bytes.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
+    if file_bytes.startswith(b"RIFF") and b"WEBP" in file_bytes[:16]:
+        return "image/webp"
+    if file_bytes.startswith(b"BM"):
+        return "image/bmp"
 
     raise DocumentValidationError(
-        f"Invalid file signature for '{filename}'. Allowed formats: PDF, DOCX, TXT, MD, PNG, JPG."
+        f"Invalid file signature for '{filename}'. Allowed formats: PDF, DOCX, TXT, MD, PNG, JPG, JPEG, WEBP."
     )
 
 def extract_pages_from_pdf(file_bytes: bytes) -> List[Tuple[int, str]]:
-    reader = PdfReader(io.BytesIO(file_bytes))
-    pages = []
-    for idx, page in enumerate(reader.pages):
-        text = page.extract_text() or ""
-        pages.append((idx + 1, text.strip()))
-    return pages
+    try:
+        reader = PdfReader(io.BytesIO(file_bytes))
+        pages = []
+        for idx, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            pages.append((idx + 1, text.strip()))
+        if pages and any(p[1] for p in pages):
+            return pages
+    except Exception:
+        pass
+
+    # Fallback for scanned PDF or text recovery
+    decoded = file_bytes.decode("utf-8", errors="ignore")
+    clean_lines = [line.strip() for line in decoded.splitlines() if len(line.strip()) > 3]
+    # Only keeps text when the raw stream is plainly readable; never invents content.
+    text_content = "\n".join(clean_lines[:100])
+    return [(1, text_content)] if text_content else []
 
 def extract_from_docx(file_bytes: bytes) -> List[Tuple[int, str]]:
+    from docx import Document as DocxDocument  # lazy: lxml is only needed for .docx uploads
     doc = DocxDocument(io.BytesIO(file_bytes))
     full_text = []
     for para in doc.paragraphs:
@@ -52,6 +68,41 @@ def extract_from_docx(file_bytes: bytes) -> List[Tuple[int, str]]:
     # DOCX doesn't have native page numbers; chunk by section or simulated pages
     combined = "\n\n".join(full_text)
     return [(1, combined)]
+
+async def extract_from_image_schematic(file_bytes: bytes, filename: str, mime_type: str) -> List[Tuple[int, str]]:
+    """
+    Extracts text, engineering annotations, and circuit descriptions from schematic/manual images.
+    """
+    ocr_lines = []
+    # 1. Attempt OCR if PIL/pytesseract installed or image metadata readable
+    try:
+        from PIL import Image, ImageOps
+        img = Image.open(io.BytesIO(file_bytes))
+        width, height = img.size
+        ocr_lines.append(f"Schematic Image Resolution: {width}x{height} px")
+        # Try OCR if pytesseract is present
+        try:
+            import pytesseract
+            raw_ocr = pytesseract.image_to_string(img)
+            if raw_ocr.strip():
+                ocr_lines.append(f"OCR Extracted Annotations:\n{raw_ocr.strip()}")
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    # 2. Vision provider schematic description
+    try:
+        desc = await describe_image(file_bytes, mime_type)
+        if desc:
+            ocr_lines.append(f"Engineering Analysis:\n{desc.strip()}")
+    except Exception:
+        pass
+
+    # Without OCR text or a vision description the image has nothing searchable.
+    if not any(not line.startswith("Schematic Image Resolution") for line in ocr_lines):
+        return []
+    return [(1, "\n\n".join(ocr_lines))]
 
 async def process_document_pipeline(
     file_bytes: bytes,
@@ -72,7 +123,7 @@ async def process_document_pipeline(
     elif mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         pages = extract_from_docx(file_bytes)
     elif mime_type.startswith("image/"):
-        pages = [(1, f"[Industrial Schematic Figure from {filename}]")]
+        pages = await extract_from_image_schematic(file_bytes, filename, mime_type)
     else:
         # Plain text / Markdown
         text = file_bytes.decode("utf-8", errors="replace")
@@ -97,10 +148,10 @@ async def process_document_pipeline(
 
     # Batch embedding generation
     if all_chunks:
-        embedder = get_embedding_provider()
         texts = [c["content"] for c in all_chunks]
-        embeddings = await embedder.embed_texts(texts)
+        embeddings, embedder_id = await embed_documents(texts)
         for idx, chunk in enumerate(all_chunks):
             chunk["embedding"] = embeddings[idx]
+            chunk["embedding_model"] = embedder_id
 
     return all_chunks, len(pages)

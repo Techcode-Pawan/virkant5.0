@@ -53,4 +53,23 @@ def structure_aware_chunking(
             "metadata": metadata
         })
 
-    return chunks
+    # A single paragraph without blank lines can exceed the target many times
+    # over; split those on whitespace with overlap so retrieval stays precise.
+    limit = target_chunk_size * 2
+    bounded: List[Dict[str, Any]] = []
+    for chunk in chunks:
+        content = chunk["content"]
+        if len(content) <= limit:
+            bounded.append(chunk)
+            continue
+        start = 0
+        while start < len(content):
+            end = min(len(content), start + target_chunk_size)
+            if end < len(content):
+                space = content.rfind(" ", start + target_chunk_size // 2, end)
+                end = space if space > start else end
+            bounded.append({**chunk, "content": content[start:end].strip()})
+            if end >= len(content):
+                break
+            start = max(end - overlap_size, start + 1)
+    return bounded

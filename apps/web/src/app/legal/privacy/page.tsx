@@ -2,11 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, Shield } from "lucide-react";
-import { useTranslation } from "@/lib/i18n";
+import { ArrowLeft } from "lucide-react";
 
 export default function PrivacyPolicyPage() {
-  const { t } = useTranslation();
 
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12 space-y-8">

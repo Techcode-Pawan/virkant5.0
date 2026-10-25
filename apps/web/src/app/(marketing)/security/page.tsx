@@ -1,8 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
-import { Lock, ShieldCheck, Key, Database, FileText, CheckCircle2 } from "lucide-react";
+import { Lock, ShieldCheck, Key, Database } from "lucide-react";
 
 export default function SecurityPage() {
   return (

@@ -51,3 +51,10 @@ redis_data/
 
 # OS files
 Thumbs.db
+
+# Local data (uploads, legacy SQLite file, test artefacts)
+apps/api/storage/
+apps/api/storage_test/
+apps/api/storage_e2e/
+*.db
+*.tsbuildinfo

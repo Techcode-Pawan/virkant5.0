@@ -1,101 +1,50 @@
 "use client";
 
 import React, { useState } from "react";
-import { Mail, CheckCircle2, Building, Send } from "lucide-react";
+
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "";
 
 export default function ContactPage() {
-  const [submitted, setSubmitted] = useState(false);
+  const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
+  const [message, setMessage] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitted(true);
-  };
+  const mailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`ForgeWise AI enquiry${company ? ` from ${company}` : ""}`)}&body=${encodeURIComponent(`${message}\n\n${name}${company ? `, ${company}` : ""}`)}`;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-16 space-y-8">
-      <div className="text-center space-y-3">
-        <span className="font-mono text-xs font-semibold uppercase tracking-wider text-teal">
-          Enterprise Deployments
-        </span>
-        <h1 className="text-3xl font-bold tracking-tight text-txt-primary">
-          Connect With Our Engineering Team
-        </h1>
-        <p className="text-sm text-txt-muted leading-relaxed">
-          Request private on-premise air-gapped deployment specs or enterprise facility onboarding.
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-border-subtle bg-surface p-8 shadow-sm">
-        {submitted ? (
-          <div className="text-center space-y-3 py-8">
-            <CheckCircle2 className="h-12 w-12 text-success mx-auto" />
-            <h3 className="text-lg font-semibold text-txt-primary">
-              Inquiry Dispatched
-            </h3>
-            <p className="text-xs text-txt-muted">
-              Our industrial solutions architecture team will follow up within one business day.
-            </p>
+    <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
+      <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">Contact</h1>
+      <p className="mt-2 text-sm text-txt-muted">
+        Questions about deployment, on-premise installation or onboarding a plant.
+      </p>
+      {CONTACT_EMAIL ? (
+        <form
+          className="panel mt-8 space-y-4 p-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            window.location.href = mailto;
+          }}
+        >
+          <div>
+            <label className="label" htmlFor="c-name">Your name</label>
+            <input id="c-name" className="field" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-txt-muted mb-1">
-                Full Name
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Marcus Cole"
-                className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3.5 py-2 text-sm text-txt-primary focus:outline-none focus:border-teal"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-txt-muted mb-1">
-                Plant Facility / Organization
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Precision Forging Plant 3"
-                className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3.5 py-2 text-sm text-txt-primary focus:outline-none focus:border-teal"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-txt-muted mb-1">
-                Work Email
-              </label>
-              <input
-                type="email"
-                required
-                placeholder="m.cole@plant.example.com"
-                className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3.5 py-2 text-sm text-txt-primary focus:outline-none focus:border-teal"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-txt-muted mb-1">
-                Equipment Types & Deployment Scope
-              </label>
-              <textarea
-                rows={4}
-                required
-                placeholder="Describe machine types (CNC mills, hydraulic presses, turbines) and document volume..."
-                className="w-full rounded-md border border-border-subtle bg-elevated/50 px-3.5 py-2 text-sm text-txt-primary focus:outline-none focus:border-teal"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-2 rounded-md bg-brand py-2.5 text-sm font-semibold text-white shadow-xs hover:opacity-90 transition-opacity"
-            >
-              <Send className="h-4 w-4" />
-              <span>Submit Enterprise Request</span>
-            </button>
-          </form>
-        )}
-      </div>
+          <div>
+            <label className="label" htmlFor="c-company">Company (optional)</label>
+            <input id="c-company" className="field" value={company} onChange={(e) => setCompany(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="c-msg">Message</label>
+            <textarea id="c-msg" rows={5} className="field h-auto py-2" value={message} onChange={(e) => setMessage(e.target.value)} required />
+          </div>
+          <button type="submit" className="btn-primary">Open in your e-mail app</button>
+          <p className="text-xs text-txt-faint">This opens a pre-filled e-mail to {CONTACT_EMAIL}. Nothing is sent from this page.</p>
+        </form>
+      ) : (
+        <p className="panel mt-8 p-6 text-sm text-txt-muted">
+          Contact your ForgeWise administrator. To show a contact form here, set NEXT_PUBLIC_CONTACT_EMAIL in apps/web/.env.local.
+        </p>
+      )}
     </div>
   );
 }
